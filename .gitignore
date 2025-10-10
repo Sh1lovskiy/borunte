@@ -1,0 +1,30 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Local captures and datasets
+captures/
+*.npy
+*.npz
+*.png
+
+# Logs and debug outputs
+.logs/
+*.log
+*.txt
+*.json
+
+# Temporary or patch files
+*.patch
+*.bak
+*.tmp
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
