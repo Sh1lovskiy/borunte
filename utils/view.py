@@ -218,9 +218,6 @@ class PlotBuilder:
                 aspectmode="data",
             ),
             margin=dict(l=0, r=0, t=40, b=0),
-            title=(
-                "Captured Poses" if not USE_GENERATED_GRID else "Generated Grid Poses"
-            ),
             showlegend=False,
         )
         return fig

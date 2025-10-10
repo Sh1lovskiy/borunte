@@ -94,14 +94,25 @@ class Logger:
         origin_file = pathlib.Path(frame.filename).stem
 
         logger = _logger.bind(module=name, origin=origin_file)
-        # attach .tag() method automatically (from previous patch)
+        # attach helpers on the bound logger (dynamic monkey-patch)
         if not hasattr(logger, "tag"):
 
             def _tag(tag: str, msg: str, level: str = "info") -> None:
+                """
+                Unified tagged logging: supports level in
+                {"debug", "info", "warning", "error", "critical"}.
+                Example: logger.tag("GRID", "initialized", level="debug")
+                """
                 text = f"[{tag}] {msg}"
-                getattr(logger, level, logger.info)(text)
+                if hasattr(logger, level):
+                    getattr(logger, level)(text)
+                else:
+                    logger.info(text)
 
             setattr(logger, "tag", _tag)
+        # backward compatibility: some modules call .warn()
+        if not hasattr(logger, "warn"):
+            setattr(logger, "warn", logger.warning)
 
         return logger
 
