@@ -1,30 +1,41 @@
 # borunte/cap_session.py
-"""CaptureSession: filesystem layout and saving helpers."""
+"""Filesystem helpers for capture sessions."""
 
 from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 
 import cv2
 import numpy as np
 import pyrealsense2 as rs
 
 from utils.logger import Logger
-from .config import CAPTURE_ROOT_DIR
+
+from .config import BORUNTE_CONFIG, BorunteConfig
 
 _log = Logger.get_logger()
 
 
-class CaptureSession:
-    """Create timestamped dir, manage index, save images and poses."""
+def _atomic_write_json(path: Path, data: dict) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
 
-    def __init__(self, root_dir: Optional[str] = None):
+
+class CaptureSession:
+    """Create timestamped directories and save images, depth, and poses."""
+
+    def __init__(
+        self,
+        config: BorunteConfig = BORUNTE_CONFIG,
+        root_dir: Optional[Path] = None,
+    ) -> None:
         ts = time.strftime("%Y%m%d_%H%M%S")
-        base = root_dir or CAPTURE_ROOT_DIR
-        self.root = Path(base) / ts
+        base = Path(root_dir) if root_dir is not None else config.capture_root
+        self.root = base / ts
         self.root.mkdir(parents=True, exist_ok=True)
         self.poses_path = self.root / "poses.json"
         self.poses: Dict[str, Dict[str, float]] = {}
@@ -39,23 +50,15 @@ class CaptureSession:
 
     def save_params_json(
         self,
-        prof: rs.pipeline_profile,
+        profile: rs.pipeline_profile,
         out_json: Path,
         applied_disparity: int,
         decimation_mag: int,
     ) -> None:
-        d_prof = prof.get_stream(rs.stream.depth).as_video_stream_profile()
-        c_prof = prof.get_stream(rs.stream.color).as_video_stream_profile()
+        depth_profile = profile.get_stream(rs.stream.depth).as_video_stream_profile()
+        color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
 
-        intr_d = d_prof.get_intrinsics()
-        intr_c = c_prof.get_intrinsics()
-        extr_d2c = d_prof.get_extrinsics_to(c_prof)
-        extr_c2d = c_prof.get_extrinsics_to(d_prof)
-
-        dev = prof.get_device()
-        depth_scale = float(dev.first_depth_sensor().get_depth_scale())
-
-        def intr_to_dict(intr: Any) -> Dict[str, Any]:
+        def intr_to_dict(intr: rs.intrinsics) -> Dict[str, float]:
             return {
                 "width": int(intr.width),
                 "height": int(intr.height),
@@ -67,21 +70,26 @@ class CaptureSession:
                 "coeffs": [float(c) for c in intr.coeffs[:5]],
             }
 
-        def extr_to_dict(extr: Any) -> Dict[str, Any]:
+        def extr_to_dict(extr: rs.extrinsics) -> Dict[str, list[float]]:
             rot = [float(x) for x in extr.rotation]
-            t = [float(x) for x in extr.translation]
-            Rm = [rot[0:3], rot[3:6], rot[6:9]]
-            return {"rotation": Rm, "translation": t}
+            trans = [float(x) for x in extr.translation]
+            return {
+                "rotation": [rot[0:3], rot[3:6], rot[6:9]],
+                "translation": trans,
+            }
+
+        device = profile.get_device()
+        depth_scale = float(device.first_depth_sensor().get_depth_scale())
 
         data = {
             "depth_scale": depth_scale,
             "intrinsics": {
-                "depth": intr_to_dict(intr_d),
-                "color": intr_to_dict(intr_c),
+                "depth": intr_to_dict(depth_profile.get_intrinsics()),
+                "color": intr_to_dict(color_profile.get_intrinsics()),
             },
             "extrinsics": {
-                "depth_to_color": extr_to_dict(extr_d2c),
-                "color_to_depth": extr_to_dict(extr_c2d),
+                "depth_to_color": extr_to_dict(depth_profile.get_extrinsics_to(color_profile)),
+                "color_to_depth": extr_to_dict(color_profile.get_extrinsics_to(depth_profile)),
             },
             "processing": {
                 "applied_disparity_shift": int(applied_disparity),
@@ -89,27 +97,20 @@ class CaptureSession:
             },
         }
         out_json.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_json, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        _atomic_write_json(out_json, data)
         _log.tag("RS2", f"params -> {out_json}")
 
-    def save_rgb_depth(
-        self, subdir: Path, name: str, rgb: np.ndarray, depth_m: np.ndarray
-    ) -> None:
+    def save_rgb_depth(self, subdir: Path, name: str, rgb: np.ndarray, depth_m: np.ndarray) -> None:
         subdir.mkdir(parents=True, exist_ok=True)
         rgb_path = subdir / f"{name}_rgb.png"
-        dpt_path = subdir / f"{name}_depth.npy"
+        depth_path = subdir / f"{name}_depth.npy"
         cv2.imwrite(str(rgb_path), rgb)
-        np.save(str(dpt_path), depth_m.astype(np.float32))
-        _log.tag("SAVE", f"{subdir.name}/{rgb_path.name}, {dpt_path.name}")
+        np.save(str(depth_path), depth_m.astype(np.float32))
+        _log.tag("SAVE", f"{subdir.name}/{rgb_path.name}, {depth_path.name}")
 
     def update_pose(self, name: str, pose6: Dict[str, float]) -> None:
         self.poses[name] = pose6
-        # атомарная запись poses.json
-        tmp = self.poses_path.with_suffix(".json.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.poses, f, indent=2, ensure_ascii=False)
-        tmp.replace(self.poses_path)
+        _atomic_write_json(self.poses_path, self.poses)
         _log.tag("POSE", f"updated index {name}")
 
     def save_preview_snapshot(

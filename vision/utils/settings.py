@@ -1,17 +1,14 @@
 # utils/settings.py
 from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
-
-from config import SETTINGS
 
 
 @dataclass(frozen=True)
 class LoggingCfg:
     level: str = "INFO"
     json: bool = True
-    log_dir: Path = SETTINGS.logs_root
+    log_dir: Path = Path(".logs")
     log_format: str = (
         "<green>{time:MM-DD HH:mm:ss}</green>"
         "[<level>{level:.3}</level>]"

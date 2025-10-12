@@ -1,30 +1,34 @@
 # borunte/state.py
-"""State query helpers and formatting utilities."""
+"""State query helpers built on RobotClient."""
 
 from __future__ import annotations
 
-from typing import Tuple, Sequence
-import socket
+from typing import Sequence, Tuple
 
-from .wire import q
 from utils.logger import Logger
+
+from .wire import RobotClient
 
 _log = Logger.get_logger()
 
 
-def query_mode_move_alarm(sock: socket.socket) -> Tuple[int, int, int]:
-    """Query current robot mode, motion state, and alarm flag."""
-    cm, mv, al = q(sock, ["curMode", "isMoving", "curAlarm"])
-    return int(cm), int(mv), int(al)
+def query_mode_move_alarm(client: RobotClient) -> Tuple[int, int, int]:
+    values = client.query(["curMode", "isMoving", "curAlarm"])
+    mode, moving, alarm = (int(values[0]), int(values[1]), int(values[2]))
+    _log.tag("STATE", f"mode={mode} moving={moving} alarm={alarm}")
+    return mode, moving, alarm
 
 
-def query_world(sock: socket.socket) -> Tuple[float, float, float, float, float, float]:
-    """Query current world pose (X, Y, Z, U, V, W)."""
-    vals = q(sock, [f"world-{i}" for i in range(6)])
-    return tuple(float(v) for v in vals[:6])  # type: ignore[return-value]
+def query_world(client: RobotClient) -> Tuple[float, float, float, float, float, float]:
+    values = client.query([f"world-{i}" for i in range(6)])
+    pose = tuple(float(v) for v in values[:6])
+    _log.tag("STATE", f"world={pose}")
+    return pose  # type: ignore[return-value]
 
 
 def fmt_xyzuvw_thousand(raw: Sequence[int]) -> str:
-    """Format XYZUVW values stored in thousandths to readable units."""
     x, y, z, u, v, w = [r / 1000.0 for r in raw[:6]]
     return f"X={x:.3f} Y={y:.3f} Z={z:.3f} U={u:.3f} V={v:.3f} W={w:.3f}"
+
+
+__all__ = ["query_mode_move_alarm", "query_world", "fmt_xyzuvw_thousand"]

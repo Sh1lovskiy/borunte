@@ -1,117 +1,83 @@
-# Borunte Robot Calibration and Capture System
+# Borunte Robotics and Calibration Toolkit
 
-This repository provides a modular, production-grade Python system for controlling a **Borunte industrial robot**, managing **RGB-D camera capture** (Intel RealSense), and performing **offline hand–eye calibration**.
-The system is designed for repeatable grid-based scanning, dataset acquisition, and accurate calibration between robot base, gripper, and camera coordinates.
+This repository contains the Borunte robot TCP client, RealSense capture utilities, and offline calibration pipelines. The code is organised into Python packages so it can be imported or executed via `uv run -m package.module`.
 
----
+## Repository layout
 
-## Features
+- `config.py` – project-wide settings shared by all packages.
+- `borunte/` – robot client, capture session helpers, RealSense preview, and the high level runner.
+- `calib/` – ChArUco detection utilities and offline calibration entry points.
+- `utils/` – logging and error tracking helpers.
+- `examples/` – small scripts such as `smoke_refactor_check.py` for sanity checks.
 
-* **Robot Control Layer**
+## Configuration
 
-  * Ethernet communication via Borunte’s JSON RemoteMonitor protocol (port 9760)
-  * Direct TCP motion commands (MoveL, start/stop, emergency halt)
-  * State monitoring (mode, alarm, motion)
-  * Heartbeat watchdog for continuous operation
+Configuration is centralised in dataclasses. The root `config.Settings` reads defaults from the repository and honours environment variables (e.g. `BORUNTE_DATA_ROOT`, `BORUNTE_ROBOT_HOST`).
 
-* **Camera Management**
+Each package provides its own config wrapper:
 
-  * Live RealSense RGB-D streaming with synchronized frame capture
-  * Interactive or automatic capture modes
-  * On-screen preview with RGB and depth visualization
-  * Automatic saving of `rs2_params.json` for calibration reuse
+- `borunte.config.BorunteConfig` exposes capture profiles, RealSense preview parameters, robot network settings, and motion limits.
+- `calib.config.CalibConfig` defines detector thresholds, solver options, and output filenames.
 
-* **Grid and Waypoint Execution**
+Use the provided objects directly:
 
-  * 3D workspace definition with deterministic grid generation
-  * Optional predefined waypoint execution (`waypoints.json`)
-  * Pose logging to `poses.json` for each capture point
-
-* **Calibration and Analysis**
-
-  * ChArUco/ArUco/Checkerboard detection with OpenCV ≥4.7
-  * Full corner and ID extraction for robust PnP estimation
-  * Multiple hand–eye solvers (Tsai, Park, Horaud, Daniilidis, Andreff)
-  * Detailed reports with rotation/translation diagnostics and RMSE filtering
-
----
-
-## Repository Structure
-
-```
-borunte/
-├── cam_rs.py           # RealSense streaming and capture
-├── cap_session.py      # Dataset folder management
-├── config.py           # IP, port, workspace, motion parameters
-├── control.py          # Robot control and emergency handling
-├── grid.py             # Grid generation utilities
-├── motion.py           # Low-level movement functions
-├── state.py            # Robot state and pose queries
-├── waypoints.py        # Waypoint loading and validation
-├── wire.py             # Socket I/O layer for JSON protocol
-calib/
-├── charuco.py          # Board generation and pose detection
-├── handeye.py          # Multiple hand–eye algorithms
-├── io_utils.py         # Data path helpers
-├── offline.py          # Offline calibration orchestrator
-utils/
-├── logger.py           # Log formatting and runtime tags
-├── error_tracker.py    # Context-managed error handling
-├── keyboard.py         # Optional key event listener
-├── settings.py         # Shared constants
-main.py                 # Entry point (grid capture + calibration)
-pyproject.toml          # Project configuration
+```python
+from borunte.config import BORUNTE_CONFIG
+from calib.config import CALIB_CONFIG
 ```
 
----
+All filesystem paths come from these configs and rely on `pathlib.Path`. Output directories are created on demand when writing files.
 
-## Typical Workflow
+## Running capture and calibration
 
-### 1. Grid or Waypoint Capture
+The capture pipeline is importable and does not rely on CLI parsing:
+
+```python
+from borunte.runner import run_capture_pipeline
+from borunte import BORUNTE_CONFIG
+
+run_capture_pipeline(BORUNTE_CONFIG)
+```
+
+Alternatively, run the shim:
 
 ```bash
-uv run -m main
+uv run -m borunte.runner
 ```
 
-**Modes:**
+Long-running loops such as pose traversal and image detection use tqdm progress bars and log concise milestones. The project logger lives in `utils/logger.py`; use `Logger.get_logger()` to obtain a module-scoped logger.
 
-* `RUN_MODE=grid` – execute generated workspace grid
-* `RUN_MODE=grid_with_calib` – capture and immediately run calibration
-* `RUN_MODE=calib_only` – run calibration on existing dataset
+## Logging and outputs
 
-### 2. Offline Calibration
+Log files are stored under the directory defined by `Settings.logs_root` (default `./logs`). Capture sessions are written under `Settings.captures_root` with timestamped directories. Calibration outputs are stored below `Settings.default_calibration_output` with per-dataset subdirectories.
 
-After capture, calibration results are saved to:
+## Quickstart
 
+```python
+from borunte import BORUNTE_CONFIG, run_capture_pipeline
+from borunte.grid import build_grid_for_count
+from calib.offline import run_offline
+
+# Inspect config
+print(BORUNTE_CONFIG.network.host)
+
+# Build a grid of poses
+poses = build_grid_for_count(config=BORUNTE_CONFIG)
+
+# Trigger a dry-run smoke check (no hardware interaction)
+from examples.smoke_refactor_check import main as smoke
+smoke()
+
+# Run offline calibration on an existing dataset
+from calib.config import CALIB_CONFIG
+run_offline("captures/latest_session/preview_single", CALIB_CONFIG)
 ```
-captures/<timestamp>/.../handeye_report_validated.txt
-```
-Reports include:
 
-* ChArUco reprojection RMSE per frame
-* Transformation spread diagnostics
-* Best translation vector by prior distance
+## Changelog
 
----
-
-## Requirements
-
-* Python ≥3.10
-* OpenCV ≥4.7
-* Intel RealSense SDK (`pyrealsense2`)
-* NumPy, tqdm, loguru
-* Borunte robot connected via TCP (default: 192.168.4.4:9760)
-
----
-
-## Example Dataset Layout
-
-```
-captures/
-  20251010_093305/
-    preview_single/
-      000_rgb.png
-      000_depth.png
-    poses.json
-    rs2_params.json
-```
+- Introduced root `config.Settings` and package-level config dataclasses.
+- Replaced ad-hoc constants with structured configs across robot and calibration code.
+- Added `borunte.runner` importable pipeline and simplified `main.py` shim.
+- Reworked robot TCP client into `RobotClient` with proper logging and retries.
+- Simplified offline calibration workflow to use centralised config and atomic outputs.
+- Added smoke test script and updated README.

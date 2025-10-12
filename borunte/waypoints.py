@@ -1,50 +1,38 @@
 # borunte/waypoints.py
-"""Flexible waypoint loader for grid/waypoint runs.
-
-Supports:
-- JSON:
-  * root list: [{"x":..,"y":..,"z":..,"rx":..,"ry":..,"rz":..}, ...]
-  * dict-of-dicts: {"0": {...}, "1": {...}, ...}
-  * wrapped arrays: {"points":[...]} / {"poses":[...]} / {"waypoints":[...]} / {"data":[...]}
-  * list of [x,y,z,rx,ry,rz] vectors
-- CSV:
-  * with or without header; order: x,y,z,rx,ry,rz
-
-Returns a list[List[float]] of [x, y, z, rx, ry, rz].
-"""
+"""Load waypoint poses from JSON or CSV files."""
 
 from __future__ import annotations
 
 import csv
 import json
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple, Union
+from typing import Iterable, List, Sequence, Union
 
 from utils.logger import Logger
 
-_log = Logger.get_logger("")
+from .config import BORUNTE_CONFIG, BorunteConfig
+
+_log = Logger.get_logger()
 
 Pose = List[float]
 JsonVal = Union[dict, list, float, int, str]
 
 
-def _as_float(v) -> float:
-    if isinstance(v, bool):
+def _as_float(value) -> float:
+    if isinstance(value, bool):
         raise TypeError("bool is not a valid numeric pose value")
-    return float(v)
+    return float(value)
 
 
-def _norm_from_dict(d: dict) -> Pose:
-    """Normalize dict with keys x,y,z,rx,ry,rz (case-insensitive)."""
-
+def _norm_from_dict(data: dict) -> Pose:
     def pick(*names: str) -> float:
-        for n in names:
-            if n in d:
-                return _as_float(d[n])
-            ln = n.lower()
-            for k in d.keys():
-                if k.lower() == ln:
-                    return _as_float(d[k])
+        for name in names:
+            if name in data:
+                return _as_float(data[name])
+            lower = name.lower()
+            for key in data.keys():
+                if key.lower() == lower:
+                    return _as_float(data[key])
         raise KeyError(f"missing key {names!r}")
 
     x = pick("x")
@@ -57,7 +45,6 @@ def _norm_from_dict(d: dict) -> Pose:
 
 
 def _norm_from_seq(seq: Sequence) -> Pose:
-    """Normalize [x,y,z,rx,ry,rz] sequence."""
     if len(seq) != 6:
         raise ValueError("sequence must have 6 elements [x,y,z,rx,ry,rz]")
     return [
@@ -71,145 +58,130 @@ def _norm_from_seq(seq: Sequence) -> Pose:
 
 
 def _extract_json_array(root: JsonVal) -> Iterable:
-    """Accept list, dict-of-dicts, or wrappers with 'points'/'poses'/'waypoints'/'data'."""
     if isinstance(root, list):
         return root
     if isinstance(root, dict):
-        # wrappers
-        for k in ("points", "poses", "waypoints", "data"):
-            if k in root and isinstance(root[k], list):
-                return root[k]
-        # dict of dicts or dict of vectors
-        # sort by numeric key if possible for stable order
+        for key in ("points", "poses", "waypoints", "data"):
+            if key in root and isinstance(root[key], list):
+                return root[key]
         try:
-            keys = sorted(root.keys(), key=lambda s: int(str(s)))
+            keys = sorted(root.keys(), key=lambda item: int(str(item)))
         except Exception:
             keys = list(root.keys())
-        return [root[k] for k in keys]
+        return [root[key] for key in keys]
     raise ValueError("unsupported JSON root; must be list or dict")
 
 
 def _load_json(path: Path) -> List[Pose]:
     data = json.loads(path.read_text(encoding="utf-8"))
     items = _extract_json_array(data)
-    out: List[Pose] = []
-    for i, it in enumerate(items):
+    poses: List[Pose] = []
+    for index, item in enumerate(items):
         try:
-            if isinstance(it, dict):
-                pose = _norm_from_dict(it)
-            elif isinstance(it, (list, tuple)):
-                pose = _norm_from_seq(it)
+            if isinstance(item, dict):
+                pose = _norm_from_dict(item)
+            elif isinstance(item, (list, tuple)):
+                pose = _norm_from_seq(item)
             else:
-                raise TypeError(f"item type {type(it).__name__}")
-            out.append(pose)
-        except Exception as e:
-            _log.tag("WPT", f"skip item #{i}: {e}", "warning")
-    if not out:
+                raise TypeError(f"item type {type(item).__name__}")
+            poses.append(pose)
+        except Exception as exc:
+            _log.tag("WPT", f"skip item #{index}: {exc}", level="warning")
+    if not poses:
         raise ValueError("no valid waypoints parsed from JSON")
-    _log.tag("WPT", f"loaded {len(out)} poses from JSON {path.name}")
-    return out
+    _log.tag("WPT", f"loaded {len(poses)} poses from JSON {path.name}")
+    return poses
 
 
 def _load_csv(path: Path) -> List[Pose]:
-    rows: List[Pose] = []
-    with path.open("r", encoding="utf-8") as fh:
+    poses: List[Pose] = []
+    with path.open("r", encoding="utf-8") as handle:
         sniffer = csv.Sniffer()
-        sample = fh.read(2048)
-        fh.seek(0)
-        has_header = False
+        sample = handle.read(2048)
+        handle.seek(0)
         try:
             has_header = sniffer.has_header(sample)
         except Exception:
             has_header = False
-        reader = csv.reader(fh)
+        reader = csv.reader(handle)
         first = True
-        for i, row in enumerate(reader):
+        for row_index, row in enumerate(reader):
             if not row:
                 continue
             if first and has_header:
                 first = False
-                # try mapping by header names
-                hdr = [c.strip().lower() for c in row]
-                idx = {
-                    name: hdr.index(name)
+                headers = [cell.strip().lower() for cell in row]
+                indices = {
+                    name: headers.index(name)
                     for name in ("x", "y", "z", "rx", "ry", "rz")
-                    if name in hdr
+                    if name in headers
                 }
-                if len(idx) == 6:
-                    for j, r in enumerate(reader, start=i + 1):
-                        if not r or all(not c.strip() for c in r):
+                if len(indices) == 6:
+                    for inner_index, inner_row in enumerate(reader, start=row_index + 1):
+                        if not inner_row or all(not cell.strip() for cell in inner_row):
                             continue
                         try:
                             pose = [
-                                _as_float(r[idx["x"]]),
-                                _as_float(r[idx["y"]]),
-                                _as_float(r[idx["z"]]),
-                                _as_float(r[idx["rx"]]),
-                                _as_float(r[idx["ry"]]),
-                                _as_float(r[idx["rz"]]),
+                                _as_float(inner_row[indices["x"]]),
+                                _as_float(inner_row[indices["y"]]),
+                                _as_float(inner_row[indices["z"]]),
+                                _as_float(inner_row[indices["rx"]]),
+                                _as_float(inner_row[indices["ry"]]),
+                                _as_float(inner_row[indices["rz"]]),
                             ]
-                            rows.append(pose)
-                        except Exception as e:
-                            _log.tag("WPT", f"skip csv row #{j}: {e}", "warning")
+                            poses.append(pose)
+                        except Exception as exc:
+                            _log.tag("WPT", f"skip csv row #{inner_index}: {exc}", level="warning")
                     break
                 else:
-                    # fall back to positional
                     _log.tag(
                         "WPT",
                         "csv header incomplete; fallback to positional",
-                        "warning",
+                        level="warning",
                     )
-                    continue  # next loop will read positional rows
+                    continue
             try:
-                # positional x,y,z,rx,ry,rz
-                pose = _norm_from_seq([c.strip() for c in row][:6])
-                rows.append(pose)
-            except Exception as e:
-                _log.tag("WPT", f"skip csv row #{i}: {e}", "warning")
-    if not rows:
+                pose = _norm_from_seq([cell.strip() for cell in row][:6])
+                poses.append(pose)
+            except Exception as exc:
+                _log.tag("WPT", f"skip csv row #{row_index}: {exc}", level="warning")
+    if not poses:
         raise ValueError("no valid waypoints parsed from CSV")
-    _log.tag("WPT", f"loaded {len(rows)} poses from CSV {path.name}")
-    return rows
+    _log.tag("WPT", f"loaded {len(poses)} poses from CSV {path.name}")
+    return poses
 
 
 def load_waypoints(path: Union[str, Path], fmt: str = "json") -> List[Pose]:
-    """
-    Load waypoints from file. fmt: "json" | "csv" | "auto".
-    If "auto", picks by extension.
-    """
-    p = Path(path).expanduser().resolve()
-    if not p.exists():
-        raise FileNotFoundError(f"waypoints file not found: {p}")
+    target = Path(path).expanduser().resolve()
+    if not target.exists():
+        raise FileNotFoundError(f"waypoints file not found: {target}")
 
     use_fmt = fmt.lower()
     if use_fmt == "auto":
-        ext = p.suffix.lower()
+        ext = target.suffix.lower()
         if ext in (".json",):
             use_fmt = "json"
         elif ext in (".csv", ".tsv"):
             use_fmt = "csv"
         else:
-            use_fmt = "json"  # safe default
+            use_fmt = "json"
 
-    _log.tag("WPT", f"loading {p.name} as {use_fmt}")
+    _log.tag("WPT", f"loading {target.name} as {use_fmt}")
 
     if use_fmt == "json":
-        poses = _load_json(p)
+        poses = _load_json(target)
     elif use_fmt == "csv":
-        poses = _load_csv(p)
+        poses = _load_csv(target)
     else:
-        raise ValueError(f"unsupported fmt {fmt}")
+        raise ValueError(f"unknown waypoints format {fmt}")
+    return poses
 
-    # final sanity
-    valid: List[Pose] = []
-    for i, pose in enumerate(poses):
-        ok = all(isinstance(v, (int, float)) for v in pose) and len(pose) == 6
-        if not ok:
-            _log.tag("WPT", f"invalid pose at #{i}, skip", "warning")
-            continue
-        valid.append([float(v) for v in pose])
 
-    if not valid:
-        raise ValueError("no valid waypoints after validation")
-    _log.tag("WPT", f"ready {len(valid)} poses")
-    return valid
+def load_default_waypoints(config: BorunteConfig = BORUNTE_CONFIG) -> List[Pose]:
+    cfg = config.waypoints
+    if not cfg.file.exists():
+        raise FileNotFoundError(f"default waypoints file missing: {cfg.file}")
+    return load_waypoints(cfg.file, fmt=cfg.fmt)
+
+
+__all__ = ["load_waypoints", "load_default_waypoints"]

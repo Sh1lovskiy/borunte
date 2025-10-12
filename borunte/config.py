@@ -1,135 +1,171 @@
 # borunte/config.py
-"""Global configuration constants for the Borunte RemoteMonitor runner."""
+"""Configuration objects for Borunte robot capture and network control."""
 
 from __future__ import annotations
-from typing import Tuple, List, Dict, Any
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from config import SETTINGS, Settings
 
 
-# --- Pipeline selection ---
-# grid            run motion and capture only
-# grid_with_calib run motion and capture, then offline calibration
-# calib_only      run offline calibration only
-RUN_MODE: str = "grid_with_calib"  # "grid" | "grid_with_calib" | "calib_only"
+@dataclass(frozen=True)
+class RealSenseStream:
+    width: int
+    height: int
+    fps: int
+    decimation: int = 1
 
-# Optional dataset path for offline calibration when RUN_MODE is calib_only.
-# If None, the program will try to infer the latest session automatically.
-CALIB_DATA_DIR: str | None = "captures/20251009_145701/ds_10/d1280x720_dec1_c1280x720"
-# Which intrinsics to use from rs2_params.json
-USE_STREAM: str = "color"  # "color" or "depth"
 
-# ChArUco board
-CHARUCO_SQUARE_M: float = 0.035
-CHARUCO_MARKER_M: float = 0.026
-CHARUCO_SIZE: Tuple[int, int] = (8, 5)  # squaresX, squaresY
-ARUCO_DICT_NAME: str = "DICT_5X5_100"
+@dataclass(frozen=True)
+class RealSensePreviewConfig:
+    view: str = "both"
+    disparity_shift: Optional[int] = 10
+    warmup_frames: int = SETTINGS.realsense_warmup_frames
+    decimation: int = 1
+    spatial_magnitude: int = 2
+    spatial_smooth_alpha: float = 0.5
+    spatial_smooth_delta: float = 20.0
+    spatial_holes_fill: int = 0
+    depth_viz_min_m: Optional[float] = None
+    depth_viz_max_m: Optional[float] = None
 
-# Detection and validation
-MIN_CHARUCO_CORNERS: int = 8
-SAVE_OVERLAY_IMAGES: bool = True
-REPROJ_RMSE_MIN_PX: float = 0.6
-REPROJ_RMSE_MAX_PX: float = 2.6
-REPROJ_RMSE_STEP_PX: float = 0.05
-MIN_SWEEP_FRAMES: int = 10
 
-# Prior translation cam to gripper for method selection
-PRIOR_T_CAM2GRIPPER_M: Tuple[float, float, float] = (
-    -0.036,
-    -0.078,
-    0.029,
-)
+@dataclass(frozen=True)
+class CaptureProfile:
+    name: str
+    depth: RealSenseStream
+    color: RealSenseStream
+    disparity_sweep: Tuple[int, ...] = (10, 40)
 
-# Network
-IP: str = "192.168.4.4"
-PORT: int = 9760
-TIMEOUT_S: float = 3.0  # per-request socket timeout
-HEARTBEAT_PERIOD_S: float = (
-    5.0  # manual says heartbeat period should be less than or equal to 10 s
-)
-SOCKET_KEEPALIVE: bool = True
 
-# Polling and waits
-POLL_S: float = 0.2
-ALARM_REPRINT_S: float = 1.0
-WAIT_MODE_S: float = 2.5  # wait for Single Cycle mode latch
-WAIT_START_S: float = 6.0  # wait for isMoving to become 1
-WAIT_MOVE_S: float = 180.0  # maximum motion time
-WAIT_STOP_S: float = 5.0  # wait for Stop during release
+@dataclass(frozen=True)
+class NetworkConfig:
+    host: str
+    port: int
+    timeout_s: float
+    keepalive: bool
+    heartbeat_period_s: float = 5.0
+    poll_period_s: float = 0.2
+    alarm_print_period_s: float = 1.0
+    wait_mode_s: float = 2.5
+    wait_start_s: float = 6.0
+    wait_move_s: float = 180.0
+    wait_stop_s: float = 5.0
+    retry_delay_s: float = SETTINGS.robot_retry_delay_s
+    retry_attempts: int = SETTINGS.robot_retry_attempts
 
-# Motion
-SPEED_PERCENT: float = 35.0  # allowed range 0..100
-POS_TOL_MM: float = 2.0
-ANG_TOL_DEG: float = 2.0
 
-# Workspace in millimeters: ((X0, X1), (Y0, Y1), (Z0, Z1))
-WORKSPACE_M: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = (
-    (10.0, 370.0),  # X
-    (750.0, 1200.0),  # Y
-    (400.0, 650.0),  # Z
-)
+@dataclass(frozen=True)
+class MotionLimits:
+    speed_percent: float = 35.0
+    position_tol_mm: float = 2.0
+    angle_tol_deg: float = 2.0
+    workspace_m: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = (
+        (10.0, 370.0),
+        (750.0, 1200.0),
+        (400.0, 650.0),
+    )
+    tcp_down_uvw: Tuple[float, float, float] = (180.0, 0.0, -60.0)
+    total_points: int = 20
+    deviation_max_deg: float = 35.0
+    grid_min_counts: Tuple[int, int, int] = (3, 3, 3)
 
-# Grid shaping
-# minimum nodes per axis when building a grid
-GRID_MIN_COUNTS: Tuple[int, int, int] = (
-    3,
-    3,
-    3,
-)
 
-# Orientation base and jitter
-TCP_DOWN_UVW: Tuple[float, float, float] = (180.0, 0.0, -60.0)
-TOTAL_POINTS: int = 20
-DEV_MAX_DEG: float = 35.0
+@dataclass(frozen=True)
+class WaypointConfig:
+    use_waypoints: bool = True
+    file: Path = SETTINGS.data_root / "waypoints.json"
+    fmt: str = "json"
 
-# Registers
-ADDR_BASE: int = 800
-ADDR_LEN: int = 6
 
-# RealSense preview configuration
-PREVIEW_VIEW: str = "both"  # one of: "depth", "rgb", "both"
-PREVIEW_DEPTH_W: int = 1280
-PREVIEW_DEPTH_H: int = 720
-PREVIEW_DEPTH_FPS: int = 30
-PREVIEW_COLOR_W: int = 1280
-PREVIEW_COLOR_H: int = 720
-PREVIEW_COLOR_FPS: int = 30
-PREVIEW_DECIMATION: int = 1
-PREVIEW_DISPARITY_SHIFT: int = 10
-WARMUP_FRAMES: int = 12
+@dataclass(frozen=True)
+class CaptureMode:
+    interactive: bool = True
+    auto_delay_s: float = 0.8
 
-# Disparity shift sweep for interactive capture at each grid point
-DISPARITY_SHIFT_VALUES: List[int] = list(range(10, 46, 30))  # example: [10, 40]
 
-# Single capture profile
-CAPTURE_CONFIG: Dict[str, Any] = {
-    "name": "d1280x720_dec1_c1280x720",
-    "depth": {"w": 1280, "h": 720, "fps": 30, "decimation": 1},
-    "color": {"w": 1280, "h": 720, "fps": 30},
-}
+@dataclass(frozen=True)
+class CalibrationLink:
+    run_mode: str = "grid_with_calib"
+    dataset_override: Optional[Path] = (
+        Path(SETTINGS.default_calibration_dataset)
+        if SETTINGS.default_calibration_dataset
+        else None
+    )
+    stream: str = SETTINGS.default_calibration_intrinsics
+    min_charuco_corners: int = 8
+    save_overlay_images: bool = True
+    reproj_rmse_min_px: float = 0.6
+    reproj_rmse_max_px: float = 2.6
+    reproj_rmse_step_px: float = 0.05
+    min_sweep_frames: int = 10
+    prior_t_cam2gripper_m: Tuple[float, float, float] = (-0.036, -0.078, 0.029)
 
-# Depth post-filters
-SPATIAL_MAG: int = 2
-SPATIAL_SMOOTH_ALPHA: float = 0.5
-SPATIAL_SMOOTH_DELTA: float = 20.0
-SPATIAL_HOLES_FILL: int = 0
 
-# Depth visualization range (None means auto)
-DEPTH_VIZ_MIN_M = None
-DEPTH_VIZ_MAX_M = None
+@dataclass(frozen=True)
+class CharucoConfig:
+    square_m: float = 0.035
+    marker_m: float = 0.026
+    size: Tuple[int, int] = (8, 5)
+    dictionary: str = "DICT_5X5_100"
 
-# Capture sessions
-CAPTURE_ROOT_DIR: str = (
-    "captures"  # a timestamped subfolder will be created under this root
-)
 
-# Selection between grid and waypoints
-USE_WAYPOINTS: bool = True  # True to follow waypoints, False to use a generated grid
-WAYPOINTS_FILE: str = "waypoints.json"  # or "waypoints.csv"
-WAYPOINTS_FMT: str = "json"  # "json" or "csv"
+@dataclass(frozen=True)
+class RegisterMap:
+    base_addr: int = 800
+    length: int = 6
 
-# Capture mode
-CAPTURE_INTERACTIVE: bool = (
-    True  # True means preview with SPACE to capture, False means auto capture
-)
-AUTO_CAPTURE_DELAY_S: float = (
-    0.8  # delay before auto capture when CAPTURE_INTERACTIVE is False
-)
+
+@dataclass(frozen=True)
+class BorunteConfig:
+    settings: Settings
+    preview: RealSensePreviewConfig = field(
+        default_factory=lambda: RealSensePreviewConfig(
+            decimation=1,
+        )
+    )
+    capture_profile: CaptureProfile = field(
+        default_factory=lambda: CaptureProfile(
+            name="d1280x720_dec1_c1280x720",
+            depth=RealSenseStream(
+                width=SETTINGS.realsense_depth_width,
+                height=SETTINGS.realsense_depth_height,
+                fps=SETTINGS.realsense_depth_fps,
+                decimation=1,
+            ),
+            color=RealSenseStream(
+                width=SETTINGS.realsense_color_width,
+                height=SETTINGS.realsense_color_height,
+                fps=SETTINGS.realsense_color_fps,
+                decimation=1,
+            ),
+            disparity_sweep=(10, 40),
+        )
+    )
+    network: NetworkConfig = field(
+        default_factory=lambda: NetworkConfig(
+            host=SETTINGS.robot_host,
+            port=SETTINGS.robot_port,
+            timeout_s=SETTINGS.robot_timeout_s,
+            keepalive=SETTINGS.robot_keepalive,
+        )
+    )
+    motion: MotionLimits = field(default_factory=MotionLimits)
+    waypoints: WaypointConfig = field(default_factory=WaypointConfig)
+    capture_mode: CaptureMode = field(default_factory=CaptureMode)
+    calibration: CalibrationLink = field(default_factory=CalibrationLink)
+    charuco: CharucoConfig = field(default_factory=CharucoConfig)
+    register_map: RegisterMap = field(default_factory=RegisterMap)
+    capture_root: Path = SETTINGS.captures_root
+    use_waypoints: bool = True
+
+
+def load_borunte_config(settings: Settings = SETTINGS) -> BorunteConfig:
+    return BorunteConfig(settings=settings)
+
+
+BORUNTE_CONFIG = load_borunte_config()
+
+__all__ = ["BorunteConfig", "BORUNTE_CONFIG", "load_borunte_config", "RealSenseStream", "RealSensePreviewConfig", "CaptureProfile", "NetworkConfig", "MotionLimits", "WaypointConfig", "CaptureMode", "CalibrationLink", "CharucoConfig", "RegisterMap"]

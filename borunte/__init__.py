@@ -1,33 +1,30 @@
 # borunte/__init__.py
-"""
-Borunte RemoteMonitor SDK (TCP JSON, port 9760).
+"""Borunte robot control and capture toolkit."""
 
-Public API:
-- grid.build_grid_for_count
-- motion.write_and_run_point
-- control.Heartbeat, control.graceful_release, control.emergency_halt
-- state.query_world, state.query_mode_move_alarm
-- wire.cmd, wire.q, wire.query_addrs, wire.rewrite_800_805
-"""
+from __future__ import annotations
 
-# from .grid import build_grid_for_count
-# from .motion import write_and_run_point
-# from .control import Heartbeat, graceful_release, emergency_halt
-# from .state import query_world, query_mode_move_alarm
-# from .wire import cmd, q, query_addrs, rewrite_800_805
+from .config import (
+    BORUNTE_CONFIG,
+    BorunteConfig,
+    RealSensePreviewConfig,
+    RealSenseStream,
+    load_borunte_config,
+)
+from .wire import RobotClient
 
-# __all__ = [
-#     "build_grid_for_count",
-#     "write_and_run_point",
-#     "Heartbeat",
-#     "graceful_release",
-#     "emergency_halt",
-#     "query_world",
-#     "query_mode_move_alarm",
-#     "cmd",
-#     "q",
-#     "query_addrs",
-#     "rewrite_800_805",
-# ]
 
-# __all__: list[str] = []
+def run_capture_pipeline(*args, **kwargs):
+    from .runner import run_capture_pipeline as _run
+
+    return _run(*args, **kwargs)
+
+
+__all__ = [
+    "BORUNTE_CONFIG",
+    "BorunteConfig",
+    "RealSensePreviewConfig",
+    "RealSenseStream",
+    "load_borunte_config",
+    "RobotClient",
+    "run_capture_pipeline",
+]
