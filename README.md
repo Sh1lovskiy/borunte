@@ -1,83 +1,105 @@
-# Borunte Robotics and Calibration Toolkit
+# Borunte Robotics Toolkit
 
-This repository contains the Borunte robot TCP client, RealSense capture utilities, and offline calibration pipelines. The code is organised into Python packages so it can be imported or executed via `uv run -m package.module`.
+The Borunte repository now packages robot control, calibration, and vision tooling
+under a unified configuration-driven architecture. Each module exposes Python
+APIs and `python -m` shims for interactive or automated usage without relying on
+`argparse`.
 
-## Repository layout
+## Repository Layout
 
-- `config.py` – project-wide settings shared by all packages.
-- `borunte/` – robot client, capture session helpers, RealSense preview, and the high level runner.
-- `calib/` – ChArUco detection utilities and offline calibration entry points.
-- `utils/` – logging and error tracking helpers.
-- `examples/` – small scripts such as `smoke_refactor_check.py` for sanity checks.
+- `config.py` – Root `Settings` dataclass with environment overrides for paths,
+  robot connectivity, RealSense defaults, and calibration parameters.
+- `utils/` – Shared helpers for logging, error tracking, IO, geometry, RealSense
+  lifecycle management, tqdm progress wrappers, and NumPy formatting.
+- `borunte/` – Robot automation utilities with a stateful Modbus client,
+  configurable grid capture workflow, and a shim for `python -m borunte.run_capture`.
+- `calib/` – Calibration pipelines (`run_detect`, `run_pnp`, `run_handeye`,
+  `run_depth_align`) plus shims for direct execution.
+- `vision/` – Reorganised point-cloud processing stack with dedicated
+  sub-packages for cloud manipulation, skeletonisation, graph analysis, and
+  visualisation. Analysis runners expose `run_merge`, `run_skeleton`,
+  `run_graph`, and `run_visualize` entrypoints.
 
-## Configuration
+## Configuration Model
 
-Configuration is centralised in dataclasses. The root `config.Settings` reads defaults from the repository and honours environment variables (e.g. `BORUNTE_DATA_ROOT`, `BORUNTE_ROBOT_HOST`).
-
-Each package provides its own config wrapper:
-
-- `borunte.config.BorunteConfig` exposes capture profiles, RealSense preview parameters, robot network settings, and motion limits.
-- `calib.config.CalibConfig` defines detector thresholds, solver options, and output filenames.
-
-Use the provided objects directly:
-
-```python
-from borunte.config import BORUNTE_CONFIG
-from calib.config import CALIB_CONFIG
-```
-
-All filesystem paths come from these configs and rely on `pathlib.Path`. Output directories are created on demand when writing files.
-
-## Running capture and calibration
-
-The capture pipeline is importable and does not rely on CLI parsing:
-
-```python
-from borunte.runner import run_capture_pipeline
-from borunte import BORUNTE_CONFIG
-
-run_capture_pipeline(BORUNTE_CONFIG)
-```
-
-Alternatively, run the shim:
+`config.Settings` aggregates defaults for filesystem paths, robot networking,
+RealSense capture, and calibration expectations. Override any value with
+environment variables such as:
 
 ```bash
-uv run -m borunte.runner
+export BORUNTE_DATA_ROOT=~/datasets/borunte
+export BORUNTE_ROBOT_HOST=10.0.0.2
+export BORUNTE_RS_WIDTH=1920
 ```
 
-Long-running loops such as pose traversal and image detection use tqdm progress bars and log concise milestones. The project logger lives in `utils/logger.py`; use `Logger.get_logger()` to obtain a module-scoped logger.
+Package-specific configs extend these defaults:
 
-## Logging and outputs
+- `borunte.config.BorunteConfig` captures register addresses, retry policy,
+  grid spacing, and capture speed.
+- `calib.config.CalibConfig` bundles board geometry, detector tuning, solver
+  thresholds, and output filenames.
+- `vision.config.VisionConfig` encapsulates cloud, skeleton, graph, and
+  visualisation parameters, ensuring algorithms are free from hardcoded values.
 
-Log files are stored under the directory defined by `Settings.logs_root` (default `./logs`). Capture sessions are written under `Settings.captures_root` with timestamped directories. Calibration outputs are stored below `Settings.default_calibration_output` with per-dataset subdirectories.
+## Quickstart Workflows
 
-## Quickstart
+### Merge Multiple Point Clouds
 
 ```python
-from borunte import BORUNTE_CONFIG, run_capture_pipeline
-from borunte.grid import build_grid_for_count
-from calib.offline import run_offline
+from pathlib import Path
+from vision.analysis.merge_runner import run_merge
 
-# Inspect config
-print(BORUNTE_CONFIG.network.host)
-
-# Build a grid of poses
-poses = build_grid_for_count(config=BORUNTE_CONFIG)
-
-# Trigger a dry-run smoke check (no hardware interaction)
-from examples.smoke_refactor_check import main as smoke
-smoke()
-
-# Run offline calibration on an existing dataset
-from calib.config import CALIB_CONFIG
-run_offline("captures/latest_session/preview_single", CALIB_CONFIG)
+merged_path = run_merge([Path("scan1.npy"), Path("scan2.npy")])
 ```
+
+### Extract a Skeleton and Build a Graph
+
+```python
+from pathlib import Path
+from vision.analysis.skeleton_runner import run_skeleton
+from vision.analysis.graph_runner import run_graph
+
+skeleton_path = run_skeleton(Path("merged.npy"))
+graph_summary_path = run_graph(skeleton_path)
+```
+
+### Perform a Grid Capture Session
+
+```python
+from borunte import run_grid_capture
+
+session_folder = run_grid_capture(columns=4, rows=3, session_name="test_run")
+```
+
+### Execute Hand-Eye Calibration Steps
+
+```python
+from pathlib import Path
+from calib import run_detect, run_pnp, run_handeye, run_depth_align
+
+detections = run_detect([Path("frame_01.png"), Path("frame_02.png")])
+pnp = run_pnp(detections)
+handeye = run_handeye(pnp, robot_poses=[[0, 0, 0, 0, 0, 0]])
+run_depth_align(handeye, [Path("depth_01.png")])
+```
+
+## Logging, Progress, and Outputs
+
+All pipelines rely on `utils.logger` and `utils.error_tracker` to produce
+structured logs and summary reports. Long-running loops expose a single `tqdm`
+progress bar through `utils.progress.track`. Outputs are stored under the
+configured `Settings.paths` directories with metadata written atomically in JSON
+form.
 
 ## Changelog
 
-- Introduced root `config.Settings` and package-level config dataclasses.
-- Replaced ad-hoc constants with structured configs across robot and calibration code.
-- Added `borunte.runner` importable pipeline and simplified `main.py` shim.
-- Reworked robot TCP client into `RobotClient` with proper logging and retries.
-- Simplified offline calibration workflow to use centralised config and atomic outputs.
-- Added smoke test script and updated README.
+- Replaced legacy `vision/merge` and `vision/trusskit` modules with structured
+  `vision/cloud`, `vision/skeleton`, `vision/graph`, and `vision/viz` packages.
+- Added configuration dataclasses for the root project, vision, calibration, and
+  robot control domains.
+- Implemented reusable utilities for IO, geometry, RealSense lifecycle
+  management, and logging.
+- Introduced importable `run_*` entrypoints and associated `python -m` shims for
+  grid capture, calibration, and vision analysis tasks.
+- Standardised logging, progress indication, and output locations across all
+  pipelines.

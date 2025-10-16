@@ -1,65 +1,73 @@
 # calib/config.py
-"""Configuration for calibration pipelines."""
+"""Calibration-specific configuration values."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional
+from dataclasses import dataclass
 
-from config import SETTINGS, Settings
-from borunte.config import BORUNTE_CONFIG, CharucoConfig
+from config import get_settings
 
 
-@dataclass(frozen=True)
-class DetectionConfig:
-    min_charuco_corners: int = BORUNTE_CONFIG.calibration.min_charuco_corners
-    save_overlays: bool = BORUNTE_CONFIG.calibration.save_overlay_images
-    reproj_rmse_min_px: float = BORUNTE_CONFIG.calibration.reproj_rmse_min_px
-    reproj_rmse_max_px: float = BORUNTE_CONFIG.calibration.reproj_rmse_max_px
-    reproj_rmse_step_px: float = BORUNTE_CONFIG.calibration.reproj_rmse_step_px
-    coverage_threshold: float = 0.2
+@dataclass(slots=True)
+class DetectorConfig:
+    adaptive_thresh_win_size: int
+    corner_refinement_win_size: int
+    min_corners: int
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class SolverConfig:
-    min_frames: int = BORUNTE_CONFIG.calibration.min_sweep_frames
-    ransac_reproj_threshold: float = 3.0
-    refinement_iters: int = 2
-    translation_prior: tuple[float, float, float] = (
-        BORUNTE_CONFIG.calibration.prior_t_cam2gripper_m
-    )
+    max_iterations: int
+    determinant_threshold: float
+    orthogonality_tolerance: float
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class OutputConfig:
-    root: Path
-    overlay_dirname: str = "overlays"
-    detections_file: str = "charuco_detections.json"
-    sweep_results_file: str = "handeye_sweep_results.json"
-    report_raw: str = "handeye_report_no_validation.txt"
-    report_validated: str = "handeye_report_validated.txt"
+    detections_file: str
+    pnp_file: str
+    handeye_file: str
+    depth_file: str
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True)
 class CalibConfig:
-    settings: Settings
-    charuco: CharucoConfig = BORUNTE_CONFIG.charuco
-    detection: DetectionConfig = field(default_factory=DetectionConfig)
-    solver: SolverConfig = field(default_factory=SolverConfig)
-    output: OutputConfig = field(
-        default_factory=lambda: OutputConfig(root=SETTINGS.default_calibration_output)
-    )
-    dataset_override: Optional[Path] = (
-        BORUNTE_CONFIG.calibration.dataset_override
-    )
-    use_stream: str = BORUNTE_CONFIG.calibration.stream
+    board_name: str
+    square_size: float
+    marker_size: float
+    detector: DetectorConfig
+    solver: SolverConfig
+    output: OutputConfig
+
+    @staticmethod
+    def from_settings() -> "CalibConfig":
+        settings = get_settings()
+        detector = DetectorConfig(
+            adaptive_thresh_win_size=23,
+            corner_refinement_win_size=5,
+            min_corners=12,
+        )
+        solver = SolverConfig(
+            max_iterations=100,
+            determinant_threshold=0.01,
+            orthogonality_tolerance=1e-3,
+        )
+        output = OutputConfig(
+            detections_file="detections.json",
+            pnp_file="pnp.json",
+            handeye_file="handeye.json",
+            depth_file="depth_alignment.json",
+        )
+        return CalibConfig(
+            board_name=settings.calibration.board_name,
+            square_size=settings.calibration.square_size,
+            marker_size=settings.calibration.marker_size,
+            detector=detector,
+            solver=solver,
+            output=output,
+        )
 
 
-def load_calib_config(settings: Settings = SETTINGS) -> CalibConfig:
-    return CalibConfig(settings=settings)
+DEFAULT_CALIB_CONFIG = CalibConfig.from_settings()
 
-
-CALIB_CONFIG = load_calib_config()
-
-__all__ = ["CalibConfig", "CALIB_CONFIG", "load_calib_config", "DetectionConfig", "SolverConfig", "OutputConfig"]
+__all__ = ["CalibConfig", "DEFAULT_CALIB_CONFIG", "DetectorConfig", "OutputConfig", "SolverConfig"]
