@@ -12,7 +12,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # noqa: BLE001
     rs = None  # type: ignore
 
-from config import get_settings
+from borunte.config import get_settings
 from utils.io import ensure_directory
 from utils.logger import get_logger
 

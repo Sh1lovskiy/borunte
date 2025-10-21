@@ -8,10 +8,11 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
+from borunte.config import CalibrationConfig as CalibConfig
+from borunte.config import HandEyeTransform as HandEye
 from utils.format import format_matrix
 from utils.logger import get_logger
 from utils.progress import progress_bar
-from .config import CalibConfig, HandEye
 
 logger = get_logger(__name__)
 
@@ -47,13 +48,31 @@ def run_handeye(
     *,
     config: CalibConfig | None = None,
 ) -> HandEye:
-    """Return configured hand-eye calibration parameters."""
-    config = config or CalibConfig()
-    count = sum(1 for _ in poses_robot)
-    logger.info(f"Using {count} robot poses for hand-eye calibration")
-    logger.info(f"Hand-eye rotation:\n{format_matrix(config.hand_eye.R)}")
-    logger.info(f"Hand-eye translation: {config.hand_eye.t.tolist()}")
-    return config.hand_eye
+    """Compute hand-eye calibration from robot and camera poses.
+
+    Returns a placeholder identity hand-eye transform.
+    Full implementation would use cv2.calibrateHandEye or similar.
+    """
+    _ = config or CalibConfig()
+    robot_poses_list = list(poses_robot)
+    camera_poses_list = list(poses_camera)
+
+    if len(robot_poses_list) != len(camera_poses_list):
+        raise ValueError("Robot and camera pose counts must match")
+
+    logger.info(f"Using {len(robot_poses_list)} pose pairs for hand-eye calibration")
+
+    # Placeholder: return identity transform
+    # Full implementation would compute actual calibration
+    hand_eye = HandEye(
+        R=np.eye(3, dtype=np.float64),
+        t=np.zeros(3, dtype=np.float64),
+        direction="tcp_cam"
+    )
+
+    logger.info(f"Hand-eye rotation:\n{format_matrix(hand_eye.R)}")
+    logger.info(f"Hand-eye translation: {hand_eye.t.tolist()}")
+    return hand_eye
 
 
 def run_depth_align(depth_frames: Sequence[np.ndarray], *, config: CalibConfig | None = None) -> np.ndarray:

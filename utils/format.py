@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 import numpy as np
+import numpy.typing as npt
 
 
 @contextmanager
@@ -19,4 +20,18 @@ def numpy_print_options(*, precision: int = 4, suppress: bool = True) -> Iterato
         np.set_printoptions(**original)
 
 
-__all__ = ["numpy_print_options"]
+def format_matrix(arr: npt.NDArray[np.float64], precision: int = 6) -> str:
+    """Format a NumPy array as a clean multi-line string.
+
+    Args:
+        arr: NumPy array to format
+        precision: Number of decimal places
+
+    Returns:
+        Formatted string representation
+    """
+    with numpy_print_options(precision=precision, suppress=True):
+        return str(arr)
+
+
+__all__ = ["numpy_print_options", "format_matrix"]

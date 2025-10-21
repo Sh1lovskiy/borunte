@@ -25,4 +25,8 @@ def track(iterable: Iterable[T], *, description: str | None = None, total: int |
     )
 
 
-__all__ = ["track"]
+# Alias for backward compatibility
+progress_bar = track
+
+
+__all__ = ["track", "progress_bar"]
