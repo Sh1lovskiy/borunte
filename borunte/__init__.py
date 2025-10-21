@@ -1,13 +1,14 @@
 # borunte/__init__.py
-"""Borunte robot control and capture toolkit."""
+"""Borunte robotics toolkit - main package."""
 
 from __future__ import annotations
 
-from borunte.client import RobotClient
 from borunte.config import Settings, get_settings
 
+# Re-export key components for convenience
 __all__ = [
-    "RobotClient",
     "Settings",
     "get_settings",
 ]
+
+__version__ = "0.2.0"
