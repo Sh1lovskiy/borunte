@@ -7,11 +7,16 @@ from typing import List, Tuple
 
 import numpy as np
 
-from utils.logger import Logger
+from utils.config import (
+    DEV_MAX_DEG,
+    GRID_MIN_COUNTS,
+    TCP_DOWN_UVW,
+)
+from utils.logger import get_logger
 
-from .config import BORUNTE_CONFIG, BorunteConfig
+from .config import BorunteConfig
 
-_log = Logger.get_logger()
+_log = get_logger()
 
 
 def _axis_linspace(a0: float, a1: float, n: int) -> np.ndarray:
@@ -83,7 +88,11 @@ def _counts_from_total(
                 break
             candidates = []
             for idx, (count, length, minimum) in enumerate(
-                ((nx, lx, min_counts[0]), (ny, ly, min_counts[1]), (nz, lz, min_counts[2]))
+                (
+                    (nx, lx, min_counts[0]),
+                    (ny, ly, min_counts[1]),
+                    (nz, lz, min_counts[2]),
+                )
             ):
                 if count - 1 >= max(1, int(minimum)):
                     new_counts = [nx, ny, nz]
@@ -128,22 +137,18 @@ def _per_point_jitter(n: int, dev: float, rng: np.random.Generator):
 
 
 def build_grid_for_count(
-    ws: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] | None = None,
+    ws: (
+        Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] | None
+    ) = None,
     total: int | None = None,
-    config: BorunteConfig = BORUNTE_CONFIG,
 ) -> List[List[float]]:
     """Return an ordered XYZUVW lattice covering the workspace."""
-
-    if ws is None:
-        ws = config.motion.workspace_m
-    if total is None:
-        total = config.motion.total_points
 
     rng = np.random.default_rng(42)
     nx, ny, nz = _counts_from_total(
         ws,
         total,
-        config.motion.grid_min_counts,
+        GRID_MIN_COUNTS,
         product_granularity=5,
         overshoot_limit=0.2,
     )
@@ -156,15 +161,15 @@ def build_grid_for_count(
     for x in xs:
         for y in ys:
             count = int(zs.shape[0])
-            du, dv, dw = _per_point_jitter(count, config.motion.deviation_max_deg, rng)
+            du, dv, dw = _per_point_jitter(count, DEV_MAX_DEG, rng)
             block = np.stack(
                 [
                     np.full(count, float(x)),
                     np.full(count, float(y)),
                     zs,
-                    np.full(count, float(config.motion.tcp_down_uvw[0])) + du,
-                    np.full(count, float(config.motion.tcp_down_uvw[1])) + dv,
-                    np.full(count, float(config.motion.tcp_down_uvw[2])) + dw,
+                    np.full(count, float(TCP_DOWN_UVW[0])) + du,
+                    np.full(count, float(TCP_DOWN_UVW[1])) + dv,
+                    np.full(count, float(TCP_DOWN_UVW[2])) + dw,
                 ],
                 axis=1,
             )
@@ -174,4 +179,4 @@ def build_grid_for_count(
     return poses
 
 
-__all__ = ["build_grid_for_count"]
+__all__ = ["build_grid"]

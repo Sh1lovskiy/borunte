@@ -4,176 +4,146 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
-from typing import Optional, Tuple
+import threading
+from typing import Optional
 
 from utils.error_tracker import ErrorTracker
-from utils.logger import Logger
+from utils.logger import get_logger
+from .client import RobotClient  # всегда локальный клиент
 
-from .config import BORUNTE_CONFIG, BorunteConfig
-from .wire import RobotClient
-
-_log = Logger.get_logger()
-
-
-@dataclass
-class CommandResult:
-    ok: bool
-    message: str
-    raw: dict
+_log = get_logger("borunte.control")
 
 
 class Heartbeat:
-    """Background heartbeat sender to keep the host session alive."""
+    """
+    Background heartbeat + periodic host session assertion to avoid ERR9.
+    Sends 'heartbreak' every `period_s`.
+    Every `reassert_s` also does: setRemoteMode(1), connectHost(1).
+    """
 
-    def __init__(self, client: RobotClient, period_s: float | None = None):
+    def __init__(
+        self, client: RobotClient, period_s: float = 5.0, reassert_s: float = 9.0
+    ) -> None:
         self.client = client
-        self.period_s = (
-            period_s if period_s is not None else BORUNTE_CONFIG.network.heartbeat_period_s
-        )
-        self._stop = False
-        self._thread = None
+        self.period_s = float(period_s)
+        self.reassert_s = float(reassert_s)
+        self._stop = threading.Event()
+        self._th: Optional[threading.Thread] = None
 
     def start(self) -> None:
-        import threading
-
-        if self._thread is not None:
+        if self._th and self._th.is_alive():
             return
-
-        def _loop() -> None:
-            while not self._stop:
-                try:
-                    self.client.command("heartbreak")
-                except Exception as exc:
-                    ErrorTracker.report(exc)
-                    _log.tag("HB", f"failed: {exc}", level="warning")
-                    break
-                time.sleep(self.period_s)
-
-        self._thread = threading.Thread(target=_loop, daemon=True)
-        self._thread.start()
+        self._stop.clear()
+        self._th = threading.Thread(target=self._run, name="borunte-hb", daemon=True)
+        self._th.start()
         _log.tag("HB", "started")
 
-    def stop(self, final_ping: bool = True) -> None:
-        self._stop = True
-        if final_ping:
-            try:
-                self.client.command("heartbreak")
-            except Exception as exc:
-                ErrorTracker.report(exc)
-        if self._thread:
-            self._thread.join(timeout=1.0)
-            self._thread = None
+    def stop(self) -> None:
+        self._stop.set()
+        if self._th:
+            self._th.join(timeout=1.0)
         _log.tag("HB", "stopped")
 
-
-def _wrap(result: Tuple[bool, str, dict]) -> CommandResult:
-    return CommandResult(ok=result[0], message=result[1], raw=result[2])
-
-
-def start_button(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("startButton"))
-
-
-def stop_button(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("stopButton"))
-
-
-def pause_action(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("actionPause"))
-
-
-def single_cycle(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("actionSingleCycle"))
-
-
-def stop_action(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("actionStop"))
-
-
-def clear_alarm(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("clearAlarm"))
-
-
-def clear_alarm_continue(client: RobotClient) -> CommandResult:
-    return _wrap(client.command("clearAlarmContinue"))
-
-
-def modify_gspd(client: RobotClient, speed_percent: float) -> CommandResult:
-    val = int(round(max(0.0, min(100.0, float(speed_percent))) * 10))
-    return _wrap(client.command("modifyGSPD", str(val)))
-
-
-def _best_effort_disconnect(client: RobotClient) -> None:
-    sequence = [
-        ("setRemoteMode", "0"),
-        ("connectHost", "0"),
-        ("endHeartbreak",),
-        ("exitRemoteMonitor",),
-        ("disconnectHost",),
-        ("closeConnectHost",),
-        ("hostExit",),
-        ("logout",),
-        ("disconnectRM",),
-        ("rmDisconnect",),
-    ]
-    for cmd_tuple in sequence:
-        try:
-            ok, msg, _ = client.command(*cmd_tuple)
-            if not ok and msg:
-                _log.tag("DISC", f"{cmd_tuple[0]} message={msg}")
-        except Exception as exc:
-            ErrorTracker.report(exc)
-
-
-def graceful_release(
-    client: RobotClient,
-    hb: Optional[Heartbeat],
-    config: BorunteConfig = BORUNTE_CONFIG,
-) -> None:
-    try:
-        try:
-            _, moving, _ = client.query(["curMode", "isMoving", "curAlarm"])
-            moving_flag = int(moving)
-        except Exception as exc:
-            ErrorTracker.report(exc)
-            moving_flag = 1
-
-        if moving_flag:
-            pause_action(client)
-            time.sleep(0.1)
-        stop_button(client)
-        stop_action(client)
-
-        start_time = time.time()
-        while time.time() - start_time < config.network.wait_stop_s:
+    def _run(self) -> None:
+        last_host = 0.0
+        while not self._stop.is_set():
             try:
-                mode, mv, _ = client.query(["curMode", "isMoving", "curAlarm"])
-                if int(mode) == 3 and int(mv) == 0:
-                    break
+                ok, msg, _ = self.client.command("heartbreak", timeout=2.0)
+                if not ok:
+                    _log.tag("HB", f"failed: {msg}", level="warning")
             except Exception as exc:
-                ErrorTracker.report(exc)
-                break
-            time.sleep(0.2)
+                ErrorTracker().record("hb", str(exc))
+                _log.tag("HB", f"failed: {exc!r}", level="warning")
 
-        if hb:
-            hb.stop(final_ping=True)
+            now = time.time()
+            if now - last_host > self.reassert_s:
+                try:
+                    self.client.assert_host_session()
+                except Exception as exc:
+                    _log.tag("HOST", f"assert failed: {exc!r}", level="warning")
+                last_host = now
 
-        _best_effort_disconnect(client)
-        time.sleep(0.5)
-        _log.tag("CTRL", "graceful release complete")
-    except Exception as exc:
-        ErrorTracker.report(exc)
-        _log.tag("CTRL", f"graceful release exception: {exc}", level="warning")
+            self._stop.wait(self.period_s)
 
 
-def emergency_halt(client: RobotClient) -> None:
+def start_button(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("startButton")
+    _log.tag("CTRL", f"startButton ok={ok} msg='{msg}'")
+    return ok
+
+
+def stop_button(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("stopButton")
+    _log.tag("CTRL", f"stopButton ok={ok} msg='{msg}'")
+    return ok
+
+
+def action_stop(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("actionStop")
+    _log.tag("CTRL", f"actionStop ok={ok} msg='{msg}'")
+    return ok
+
+
+def action_single_cycle(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("actionSingleCycle")
+    _log.tag("CTRL", f"actionSingleCycle ok={ok} msg='{msg}'")
+    return ok
+
+
+def modify_gspd(client: RobotClient, speed_percent: float) -> bool:
+    val = int(round(max(0.0, min(100.0, speed_percent)) * 10))
+    ok, msg, _ = client.command("modifyGSPD", str(val))
+    _log.tag("CTRL", f"modifyGSPD {val} ok={ok} msg='{msg}'")
+    return ok
+
+
+def clear_alarm(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("clearAlarm", "0")
+    if not ok:
+        _log.tag("CTRL", f"clearAlarm -> {msg}", level="warning")
+    return ok
+
+
+def clear_alarm_continue(client: RobotClient) -> bool:
+    ok, msg, _ = client.command("clearAlarmContinue")
+    if not ok:
+        _log.tag("CTRL", f"clearAlarmContinue -> {msg}", level="warning")
+    return ok
+
+
+def set_remote_mode(client: RobotClient, on: bool) -> bool:
+    ok, msg, _ = client.command("setRemoteMode", "1" if on else "0")
+    _log.tag("CTRL", f"setRemoteMode({on}) ok={ok} msg='{msg}'")
+    return ok
+
+
+def graceful_release(client: RobotClient, hb: Optional[Heartbeat]) -> None:
+    """Gracefully release robot control with short timeouts."""
     try:
-        pause_action(client)
-        time.sleep(0.05)
-        stop_button(client)
-        stop_action(client)
-        _log.tag("CTRL", "emergency halt issued")
+        if hb:
+            hb.stop()
     except Exception as exc:
-        ErrorTracker.report(exc)
-        _log.tag("CTRL", f"emergency halt exception: {exc}", level="warning")
+        ErrorTracker().record("hb_stop", str(exc))
+
+    cmds = [
+        ("actionPause", []),
+        ("stopButton", []),
+        ("actionStop", []),
+        ("setRemoteMode", ["0"]),
+        ("connectHost", ["0"]),
+        ("endHeartbreak", []),
+        ("exitRemoteMonitor", []),
+        ("disconnectHost", []),
+        ("closeConnectHost", []),
+        ("hostExit", []),
+        ("logout", []),
+    ]
+    for name, args in cmds:
+        try:
+            ok, msg, _ = client.command(name, *args, timeout=0.8)
+            if not ok and msg:
+                _log.tag("CTRL", f"{name} -> {msg}", level="warning")
+        except Exception as exc:
+            _log.tag("CTRL", f"{name} timeout/error: {exc}", level="warning")
+            break
+    _log.tag("CTRL", "graceful release complete")

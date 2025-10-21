@@ -1,24 +1,31 @@
 # borunte/cam_rs.py
 """Intel RealSense preview and capture helpers."""
 
-
 from __future__ import annotations
 
+import threading
 import time
 from queue import Empty, SimpleQueue
 from threading import Lock
 from typing import Any, Dict, Optional, Tuple
 
-import cv2
 import numpy as np
 import pyrealsense2 as rs
 
 from utils.error_tracker import ErrorTracker
-from utils.logger import Logger
+from utils.logger import get_logger
 from .config import BORUNTE_CONFIG, BorunteConfig
 
+# Проверка наличия GUI-версии OpenCV
+try:
+    import cv2
 
-_log = Logger.get_logger()
+    HAS_CV2_GUI = hasattr(cv2, "namedWindow")
+except Exception:
+    cv2 = None
+    HAS_CV2_GUI = False
+
+_log = get_logger()
 
 
 def _first_device() -> rs.device:
@@ -44,6 +51,9 @@ def _set_and_verify_disparity_shift(device: rs.device, value: int) -> int:
 
 
 def _depth_to_viz(depth_m: np.ndarray, config: BorunteConfig) -> np.ndarray:
+    if not HAS_CV2_GUI:
+        return np.zeros_like(depth_m, dtype=np.uint8)
+
     preview = config.preview
     d = depth_m
     mask = d > 0
@@ -94,30 +104,8 @@ class PreviewStreamer:
         self._logged_intrinsics = False
         self.last_rgb: Optional[np.ndarray] = None
         self.last_depth_m: Optional[np.ndarray] = None
-
-    def start(self) -> None:
-        import threading
-
-        if self._started:
-            return
-        self._thread = None  # unify thread attr name
-        self._stop = False
-        self._started = False
-        self._available = None  # lazy-probed device availability
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        _log.tag("PREVIEW", "streamer started")
-
-    def stop(self) -> None:
-        if not self._started:
-            return
-        self._stop = True
-        try:
-            self._thread.join(timeout=2.0)
-        except Exception as exc:
-            ErrorTracker.report(exc)
-        self._started = False
-        _log.tag("PREVIEW", "streamer stopped")
+        self._thread: Optional[threading.Thread] = None
+        self._available: Optional[bool] = None
 
     def _probe_available(self) -> bool:
         """Return True if a RealSense device is present."""
@@ -126,7 +114,7 @@ class PreviewStreamer:
                 _ = _first_device()
                 self._available = True
             except Exception as e:
-                _log.tag("PREVIEW", f"no RealSense device: {e}", "warning")
+                _log.tag("PREVIEW", f"no RealSense device: {e}", level="warning")
                 self._available = False
         return bool(self._available)
 
@@ -247,14 +235,20 @@ class PreviewStreamer:
         self.profile = None
 
     def start(self) -> None:
-        import threading
-
         if self._started:
             return
         if not self._probe_available():
-            # Do not start thread, but remain usable (poll_action/snapshot are no-ops)
-            _log.tag("PREVIEW", "skip start: device not available", "warning")
+            _log.tag("PREVIEW", "skip start: device not available", level="warning")
             return
+
+        # Проверка GUI возможностей
+        if not HAS_CV2_GUI:
+            _log.tag(
+                "PREVIEW",
+                "GUI disabled (opencv-python-headless), using headless mode",
+                level="warning",
+            )
+
         self._stop = False
         self._started = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -280,21 +274,25 @@ class PreviewStreamer:
         t = self._thread
         return bool(t and t.is_alive() and not self._stop)
 
-    # Backward-compat alias used by main.py
     def is_alive(self) -> bool:
         return self.is_running()
 
     def _loop(self) -> None:
-        cv2.namedWindow("Preview", cv2.WINDOW_NORMAL)
-        streams = self.config.capture_profile
-        if self.view == "both":
-            width, height = streams.color.width * 2, streams.color.height
-        elif self.view == "rgb":
-            width, height = streams.color.width, streams.color.height
-        else:
-            width, height = streams.depth.width, streams.depth.height
-        cv2.resizeWindow("Preview", width, height)
-        cv2.moveWindow("Preview", 100, 50)
+        # Инициализация окна только если есть GUI
+        if HAS_CV2_GUI:
+            try:
+                cv2.namedWindow("Preview", cv2.WINDOW_NORMAL)
+                streams = self.config.capture_profile
+                if self.view == "both":
+                    width, height = streams.color.width * 2, streams.color.height
+                elif self.view == "rgb":
+                    width, height = streams.color.width, streams.color.height
+                else:
+                    width, height = streams.depth.width, streams.depth.height
+                cv2.resizeWindow("Preview", width, height)
+                cv2.moveWindow("Preview", 100, 50)
+            except Exception as exc:
+                _log.tag("PREVIEW", f"window init failed: {exc}", level="warning")
 
         self._open()
         try:
@@ -322,7 +320,8 @@ class PreviewStreamer:
                         depth_m = np.asanyarray(depth_proc.get_data()).astype(
                             np.float32
                         ) * float(self.depth_scale)
-                        depth_viz = _depth_to_viz(depth_m, self.config)
+                        if HAS_CV2_GUI:
+                            depth_viz = _depth_to_viz(depth_m, self.config)
 
                 with self._lock:
                     if rgb_img is not None:
@@ -330,44 +329,54 @@ class PreviewStreamer:
                     if depth_m is not None:
                         self.last_depth_m = depth_m
 
-                if (
-                    self.view == "both"
-                    and rgb_img is not None
-                    and depth_viz is not None
-                ):
-                    hmin = min(depth_viz.shape[0], rgb_img.shape[0])
-                    depth_res = cv2.resize(
-                        depth_viz,
-                        (int(depth_viz.shape[1] * hmin / depth_viz.shape[0]), hmin),
-                    )
-                    color_res = cv2.resize(
-                        rgb_img,
-                        (int(rgb_img.shape[1] * hmin / rgb_img.shape[0]), hmin),
-                    )
-                    viz = np.hstack([color_res, depth_res])
+                # Визуализация только если есть GUI
+                if HAS_CV2_GUI:
+                    viz = None
+                    if (
+                        self.view == "both"
+                        and rgb_img is not None
+                        and depth_viz is not None
+                    ):
+                        hmin = min(depth_viz.shape[0], rgb_img.shape[0])
+                        depth_res = cv2.resize(
+                            depth_viz,
+                            (int(depth_viz.shape[1] * hmin / depth_viz.shape[0]), hmin),
+                        )
+                        color_res = cv2.resize(
+                            rgb_img,
+                            (int(rgb_img.shape[1] * hmin / rgb_img.shape[0]), hmin),
+                        )
+                        viz = np.hstack([color_res, depth_res])
+                    else:
+                        viz = rgb_img if self.view == "rgb" else depth_viz
+
+                    if viz is not None:
+                        cv2.putText(
+                            viz,
+                            "SPACE capture | Q or ESC skip",
+                            (16, 36),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.9,
+                            (255, 255, 255),
+                            2,
+                        )
+                        cv2.imshow("Preview", viz)
+
+                    key = cv2.waitKey(1) & 0xFFFF
+                    if key in (13, 10, 32):
+                        self.actions.put("capture")
+                    elif key in (27, ord("q"), ord("Q")):
+                        self.actions.put("skip")
                 else:
-                    viz = rgb_img if self.view == "rgb" else depth_viz
-
-                if viz is not None:
-                    cv2.putText(
-                        viz,
-                        "SPACE capture | Q or ESC skip",
-                        (16, 36),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9,
-                        (255, 255, 255),
-                        2,
-                    )
-                    cv2.imshow("Preview", viz)
-
-                key = cv2.waitKey(1) & 0xFFFF
-                if key in (13, 10, 32):
-                    self.actions.put("capture")
-                elif key in (27, ord("q"), ord("Q")):
-                    self.actions.put("skip")
+                    # Headless режим: небольшая задержка
+                    time.sleep(0.033)
         finally:
             self._close()
-            cv2.destroyWindow("Preview")
+            if HAS_CV2_GUI:
+                try:
+                    cv2.destroyWindow("Preview")
+                except Exception:
+                    pass
 
 
 def capture_one_pair(

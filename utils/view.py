@@ -18,13 +18,7 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.spatial.transform import Rotation as R
 
-# Source selection and grid settings
-from borunte.config import (
-    WORKSPACE_M,
-    TOTAL_POINTS,
-    TCP_DOWN_UVW,
-    DEV_MAX_DEG,
-)
+from .config import WORKSPACE_M, TOTAL_POINTS, TCP_DOWN_UVW, DEV_MAX_DEG
 
 # Grid generator
 from borunte.grid import build_grid_for_count
@@ -81,16 +75,11 @@ def poses_from_generated_grid() -> List[Pose]:
     pts = build_grid_for_count(
         ws=WORKSPACE_M,
         total=int(TOTAL_POINTS),
-        rx_base=float(TCP_DOWN_UVW[0]),
-        ry_base=float(TCP_DOWN_UVW[1]),
-        rz_base=float(TCP_DOWN_UVW[2]),
-        seed=42,
-        dev_max_deg=float(DEV_MAX_DEG),
     )
     poses: List[Pose] = []
     for i, p in enumerate(pts, 1):
         x, y, z, u, v, w = map(float, p[:6])
-        poses.append(Pose(name=f"P{i:03d}", x=x, y=y, z=z, rx=u, ry=v, rz=w))
+        poses.append(Pose(name=f"{i:03d}", x=x, y=y, z=z, rx=u, ry=v, rz=w))
     return poses
 
 

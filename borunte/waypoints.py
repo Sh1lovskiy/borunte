@@ -8,11 +8,11 @@ import json
 from pathlib import Path
 from typing import Iterable, List, Sequence, Union
 
-from utils.logger import Logger
+from utils.logger import get_logger
 
 from .config import BORUNTE_CONFIG, BorunteConfig
 
-_log = Logger.get_logger()
+_log = get_logger()
 
 Pose = List[float]
 JsonVal = Union[dict, list, float, int, str]
@@ -117,7 +117,9 @@ def _load_csv(path: Path) -> List[Pose]:
                     if name in headers
                 }
                 if len(indices) == 6:
-                    for inner_index, inner_row in enumerate(reader, start=row_index + 1):
+                    for inner_index, inner_row in enumerate(
+                        reader, start=row_index + 1
+                    ):
                         if not inner_row or all(not cell.strip() for cell in inner_row):
                             continue
                         try:
@@ -131,7 +133,11 @@ def _load_csv(path: Path) -> List[Pose]:
                             ]
                             poses.append(pose)
                         except Exception as exc:
-                            _log.tag("WPT", f"skip csv row #{inner_index}: {exc}", level="warning")
+                            _log.tag(
+                                "WPT",
+                                f"skip csv row #{inner_index}: {exc}",
+                                level="warning",
+                            )
                     break
                 else:
                     _log.tag(

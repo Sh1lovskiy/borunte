@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from borunte import BORUNTE_CONFIG
+from borunte.config import BORUNTE_CONFIG
 from borunte.runner import run_capture_pipeline
 
 
