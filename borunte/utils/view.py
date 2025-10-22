@@ -20,8 +20,7 @@ from scipy.spatial.transform import Rotation as R
 
 # Grid generator
 from borunte.grid import build_grid_for_count
-
-from .config import TOTAL_POINTS, WORKSPACE_M
+from borunte.config import BORUNTE_CONFIG, GRID_TOTAL_POINTS_DEFAULT
 
 USE_GENERATED_GRID = True
 
@@ -73,8 +72,8 @@ class PoseLoader:
 def poses_from_generated_grid() -> list[Pose]:
     """Generate poses using build_grid_for_count and config bounds."""
     pts = build_grid_for_count(
-        ws=WORKSPACE_M,
-        total=int(TOTAL_POINTS),
+        ws=BORUNTE_CONFIG.motion.workspace_m,
+        total=int(GRID_TOTAL_POINTS_DEFAULT),
     )
     poses: list[Pose] = []
     for i, p in enumerate(pts, 1):
@@ -160,8 +159,9 @@ class PlotBuilder:
         axis_scale: float = 30.0,
         marker_size: int = 4,
         show_text: bool = True,
-        workspace: tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
-        | None = None,
+        workspace: (
+            tuple[tuple[float, float], tuple[float, float], tuple[float, float]] | None
+        ) = None,
     ):
         self.poses = list(poses)
         self.axis_builder = AxisBuilder(scale=axis_scale)
@@ -225,11 +225,11 @@ if __name__ == "__main__":
 
     if USE_GENERATED_GRID:
         poses = poses_from_generated_grid()
-        workspace = WORKSPACE_M
+        workspace = BORUNTE_CONFIG.motion.workspace_m
     else:
         data = json.loads(Path(inp).read_text(encoding="utf-8"))
         poses = PoseLoader.from_json_obj(data)  # will raise if not an object
-        workspace = WORKSPACE_M  # still show box for context
+        workspace = BORUNTE_CONFIG.motion.workspace_m  # still show box for context
 
     fig = PlotBuilder(
         poses,
