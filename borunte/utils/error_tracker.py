@@ -25,7 +25,7 @@ class ErrorTracker:
     context: str = "ErrorTracker"
     errors: dict[str, list[str]] = field(default_factory=dict)
 
-    # ────────────────────────────────── collection API ──────────────────────────────────────
+    # ────────────── collection API ──────────────
     def record(self, key: str, message: str) -> None:
         logger = get_logger(self.context)
         logger.error(f"{key}: {message}")
@@ -40,7 +40,7 @@ class ErrorTracker:
             logger.warning(f"Encountered {len(messages)} issues for {key}")
         return dict(self.errors)
 
-    # ────────────────────────────────── runtime plumbing ─────────────────────────────────────
+    # ────────────── runtime plumbing ──────────────
     _cleanups: ClassVar[list[CleanupFn]] = []
     _installed: ClassVar[bool] = False
     _cleanup_running: ClassVar[bool] = False
@@ -143,7 +143,7 @@ class ErrorTracker:
         logger.tag("ET", f"keyboard listener (noop) = {key}")
 
 
-# ───────────────────────────────── context manager API ──────────────────────────────────
+# ────────────── context manager API ──────────────
 
 
 @contextmanager
