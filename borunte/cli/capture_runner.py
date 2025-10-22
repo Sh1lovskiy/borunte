@@ -8,10 +8,7 @@ Hardware-free on import; runs capture workflow.
 from __future__ import annotations
 
 import logging
-import signal
 import sys
-from pathlib import Path
-from typing import Optional
 
 from borunte.config import (
     MOTION_DEVIATION_MAX_DEG,
@@ -34,7 +31,7 @@ def setup_logging(level: int = logging.INFO) -> None:
 def main(
     host: str = ROBOT_DEFAULT_HOST,
     port: int = ROBOT_DEFAULT_PORT,
-    workspace: Optional[tuple] = None,
+    workspace: tuple | None = None,
     interactive: bool = True,
 ) -> int:
     """Run grid capture workflow.

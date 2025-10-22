@@ -4,20 +4,22 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
 
-from utils.error_tracker import ErrorTracker, error_scope
-from utils.logger import get_logger, iter_progress
+from borunte.utils.error_tracker import ErrorTracker, error_scope
+from borunte.utils.logger import get_logger, iter_progress
 
-from .client import RobotClient
-from .cap_session import CaptureSession
-from .cam_rs import PreviewStreamer, capture_one_pair, HAS_CV2_GUI
+from .cam import HAS_CV2_GUI, CaptureSession, PreviewStreamer, capture_one_pair
 from .config import BORUNTE_CONFIG, BorunteConfig
-from .control import Heartbeat, clear_alarm, clear_alarm_continue
-from .control import graceful_release
-from .grid import build_grid_for_count
-from .waypoints import load_default_waypoints
+from .control import (
+    Heartbeat,
+    RobotClient,
+    clear_alarm,
+    clear_alarm_continue,
+    graceful_release,
+)
+from .grid import build_grid_for_count, load_default_waypoints
 
 _log = get_logger("borunte.runner")
 
@@ -103,13 +105,11 @@ def _setup_robot_mode(client: RobotClient) -> bool:
 
         _log.tag("SETUP", f"not ready yet; retry {i}/3", level="warning")
 
-    _log.tag(
-        "SETUP", "proceeding: Single Cycle will be asserted per step", level="warning"
-    )
+    _log.tag("SETUP", "proceeding: Single Cycle will be asserted per step", level="warning")
     return True
 
 
-def _plan(config: BorunteConfig) -> List[List[float]]:
+def _plan(config: BorunteConfig) -> list[list[float]]:
     if config.waypoints.use_waypoints:
         poses = load_default_waypoints(config)
         _log.tag(
@@ -123,7 +123,7 @@ def _plan(config: BorunteConfig) -> List[List[float]]:
         )
         _log.tag(
             "PLAN",
-            f"grid built: {len(poses)} points " f"target={config.limits.total_points}",
+            f"grid built: {len(poses)} points target={config.limits.total_points}",
         )
     if poses:
         first, last = poses[0], poses[-1]
@@ -135,7 +135,7 @@ def _plan(config: BorunteConfig) -> List[List[float]]:
     return poses
 
 
-def _cleanup_preview(streamer: Optional[PreviewStreamer]) -> None:
+def _cleanup_preview(streamer: PreviewStreamer | None) -> None:
     if streamer:
         try:
             streamer.stop()
@@ -143,7 +143,7 @@ def _cleanup_preview(streamer: Optional[PreviewStreamer]) -> None:
             ErrorTracker().record("preview_cleanup", str(exc))
 
 
-def _cleanup_robot(client: Optional[RobotClient], hb: Optional[Heartbeat]) -> None:
+def _cleanup_robot(client: RobotClient | None, hb: Heartbeat | None) -> None:
     if not client:
         return
     try:
@@ -156,7 +156,7 @@ def _cleanup_robot(client: Optional[RobotClient], hb: Optional[Heartbeat]) -> No
         ErrorTracker().record("robot_close", str(exc))
 
 
-def _prepare_preview(config: BorunteConfig) -> Optional[PreviewStreamer]:
+def _prepare_preview(config: BorunteConfig) -> PreviewStreamer | None:
     if not config.capture_mode.interactive or not HAS_CV2_GUI:
         if config.capture_mode.interactive and not HAS_CV2_GUI:
             _log.tag(
@@ -193,9 +193,7 @@ def _capture_preview(
         rgb, depth, profile = streamer.snapshot()
         if profile is not None:
             session.save_params_json(profile, session.root / "rs2_params.json", 0, 1)
-        session.save_preview_snapshot(
-            session.root / "preview_single", idx_name, rgb, depth
-        )
+        session.save_preview_snapshot(session.root / "preview_single", idx_name, rgb, depth)
         session.update_pose(
             idx_name,
             dict(
@@ -254,7 +252,7 @@ def _capture_auto(
     )
     _log.tag(
         "CAPTURE",
-        f"auto record {idx_name} -> {sweep_dir.name} " f"({frames_written} files)",
+        f"auto record {idx_name} -> {sweep_dir.name} ({frames_written} files)",
     )
     return frames_written > 0
 
@@ -283,9 +281,9 @@ def run_capture_pipeline(config: BorunteConfig = BORUNTE_CONFIG) -> Path:
 
     plan = _plan(config)
     session = CaptureSession(config=config)
-    streamer: Optional[PreviewStreamer] = None
-    client: Optional[RobotClient] = None
-    hb: Optional[Heartbeat] = None
+    streamer: PreviewStreamer | None = None
+    client: RobotClient | None = None
+    hb: Heartbeat | None = None
     captured_count = 0
 
     def _cleanup() -> None:
@@ -311,9 +309,7 @@ def run_capture_pipeline(config: BorunteConfig = BORUNTE_CONFIG) -> Path:
         hb = Heartbeat(client, period_s=config.net.heartbeat_period_s)
         hb.start()
 
-        for idx, pose in enumerate(
-            iter_progress(plan, description="Plan", total=len(plan)), 1
-        ):
+        for idx, pose in enumerate(iter_progress(plan, description="Plan", total=len(plan)), 1):
             x, y, z, u, v, w = map(float, pose[:6])
             _log.tag(
                 "PT",
@@ -336,7 +332,7 @@ def run_capture_pipeline(config: BorunteConfig = BORUNTE_CONFIG) -> Path:
                 reached = (wx, wy, wz, wu, wv, ww)
                 _log.tag(
                     "PT",
-                    f"reached=({wx:.1f}, {wy:.1f}, {wz:.1f}) " f"idx={idx_name}",
+                    f"reached=({wx:.1f}, {wy:.1f}, {wz:.1f}) idx={idx_name}",
                 )
             else:
                 _log.tag("PT", "failed to query world pose", level="warning")

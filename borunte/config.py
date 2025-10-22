@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Final, Literal, Tuple
+from typing import Final, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -107,7 +107,7 @@ MOTION_POSITION_TOL_MM: Final[float] = 2.0
 MOTION_ANGLE_TOL_DEG: Final[float] = 2.0
 MOTION_DEVIATION_MAX_DEG: Final[float] = 20.0
 
-GRID_MIN_COUNTS: Final[Tuple[int, int, int]] = (3, 3, 3)
+GRID_MIN_COUNTS: Final[tuple[int, int, int]] = (3, 3, 3)
 GRID_TOTAL_POINTS_DEFAULT: Final[int] = 20
 
 # ============================================================================
@@ -195,7 +195,7 @@ class Pose:
     ry: float
     rz: float
 
-    def as_tuple(self) -> Tuple[float, float, float, float, float, float]:
+    def as_tuple(self) -> tuple[float, float, float, float, float, float]:
         """Return pose as 6-tuple."""
         return (self.x, self.y, self.z, self.rx, self.ry, self.rz)
 
@@ -211,7 +211,7 @@ class CameraIntrinsics:
     cx: float
     cy: float
 
-    def as_tuple(self) -> Tuple[int, int, float, float, float, float]:
+    def as_tuple(self) -> tuple[int, int, float, float, float, float]:
         """Return intrinsics as 6-tuple."""
         return (self.width, self.height, self.fx, self.fy, self.cx, self.cy)
 
@@ -320,12 +320,12 @@ class MotionConfig:
     position_tol_mm: float = MOTION_POSITION_TOL_MM
     angle_tol_deg: float = MOTION_ANGLE_TOL_DEG
     deviation_max_deg: float = MOTION_DEVIATION_MAX_DEG
-    workspace_m: Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]] = (
+    workspace_m: tuple[tuple[float, float], tuple[float, float], tuple[float, float]] = (
         (10.0, 500.0),
         (700.0, 1000.0),
         (400.0, 700.0),
     )
-    tcp_down_uvw: Tuple[float, float, float] = (180.0, 0.0, -90.0)
+    tcp_down_uvw: tuple[float, float, float] = (180.0, 0.0, -90.0)
 
 
 @dataclass(frozen=True)
@@ -344,7 +344,7 @@ class VisionConfig:
     visualize: bool = False
     visualize_per_frame: bool = False
     visualize_every_k: int = 10
-    visualize_stages: Tuple[str, ...] = ("merged",)
+    visualize_stages: tuple[str, ...] = ("merged",)
 
 
 @dataclass(frozen=True)
@@ -370,7 +370,7 @@ class GridConfig:
     """Grid capture configuration."""
 
     total_points: int = GRID_TOTAL_POINTS_DEFAULT
-    min_counts: Tuple[int, int, int] = GRID_MIN_COUNTS
+    min_counts: tuple[int, int, int] = GRID_MIN_COUNTS
     interactive: bool = True
     auto_delay_s: float = 0.8
 
@@ -502,6 +502,17 @@ def get_settings() -> Settings:
 
 
 # ============================================================================
+# GLOBAL INSTANCE & ALIASES
+# ============================================================================
+
+# Global settings instance for backward compatibility
+BORUNTE_CONFIG: Settings = get_settings()
+
+# Type alias for backward compatibility
+BorunteConfig = Settings
+
+
+# ============================================================================
 # MODULE EXPORTS
 # ============================================================================
 
@@ -510,6 +521,8 @@ __all__ = [
     "get_settings",
     # Main config
     "Settings",
+    "BORUNTE_CONFIG",
+    "BorunteConfig",
     # Config sections
     "PathsConfig",
     "RobotConfig",
@@ -538,4 +551,6 @@ __all__ = [
     "FILENAME_POSES_JSON",
     "FILENAME_INTRINSICS_JSON",
     "BASE_DIR",
+    "GRID_MIN_COUNTS",
+    "MOTION_DEVIATION_MAX_DEG",
 ]

@@ -1,6 +1,9 @@
-# borunte/vision/__init__.py
-"""Vision processing and point cloud utilities."""
+# vision/__init__.py
+"""Vision package public API."""
 
-from __future__ import annotations
+from borunte.config import VisionConfig
 
-__all__: list[str] = []
+from .analysis.merge_runner import run_merge
+from .analysis.visualize_runner import run_visualize
+
+__all__ = ["VisionConfig", "run_merge", "run_visualize"]

@@ -3,14 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 import numpy.typing as npt
 from scipy.spatial.transform import Rotation as SciRot
 
 
-def axis_angle_from_matrix(R: npt.NDArray[np.float64]) -> Tuple[float, npt.NDArray[np.float64]]:
+def axis_angle_from_matrix(R: npt.NDArray[np.float64]) -> tuple[float, npt.NDArray[np.float64]]:
     """Convert rotation matrix to axis-angle representation.
 
     Args:
