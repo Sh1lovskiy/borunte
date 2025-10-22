@@ -1,14 +1,18 @@
-# Python
+# =========================================================
+# Python bytecode / compiled extensions
+# =========================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# =========================================================
+# Build / packaging artifacts
+# =========================================================
 build/
 develop-eggs/
 dist/
-.logs/
-.claude/
 downloads/
 eggs/
 .eggs/
@@ -22,32 +26,45 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# =========================================================
+# Project restructure logs and metadata
+# =========================================================
 RESTRUCTURE_COMPLETE.md
 RESTRUCTURE_PLAN.md
+
+# =========================================================
 # Virtual environments
+# =========================================================
 .venv/
 venv/
 ENV/
 env/
 
-# Testing
+# =========================================================
+# Testing / coverage / tox
+# =========================================================
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# Type checking
+# =========================================================
+# Type checking / linters / formatters
+# =========================================================
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Ruff
 .ruff_cache/
 
-# Jupyter
+# =========================================================
+# Jupyter / notebooks
+# =========================================================
 .ipynb_checkpoints/
 
-# IDEs
+# =========================================================
+# IDE / editor / OS files
+# =========================================================
 .vscode/
 .idea/
 *.swp
@@ -56,41 +73,56 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Project specific
+# =========================================================
+# Project-specific generated data
+# =========================================================
 captures/
 data/
 logs/
+.outputs/
 outputs/
 saves/
+.logs/
+.claude/
+
+# =========================================================
+# Common data and media
+# =========================================================
 *.npy
 *.npz
 *.png
 *.jpg
 *.jpeg
 
+# =========================================================
 # Configuration and secrets
+# =========================================================
 .env
 .env.local
 *.pem
 *.key
 credentials.json
 
-# Temporary files
+# =========================================================
+# Temporary / debug / backup files
+# =========================================================
 *.log
 *.txt
 *.json
-!pyproject.toml
-!package.json
-!**/rs2_params.json
-!**/poses.json
 *.patch
 *.bak
 *.tmp
 
-# Build artifacts
-*.whl
-*.tar.gz
+# =========================================================
+# Keep essential project files under version control
+# =========================================================
+!pyproject.toml
+!package.json
+!**/rs2_params.json
+!**/poses.json
 
-# Documentation
+# =========================================================
+# Documentation build output
+# =========================================================
 docs/_build/
 site/
