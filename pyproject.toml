@@ -4,9 +4,7 @@ version = "0.2.0"
 description = "Borunte robotics toolkit for RGB-D acquisition, vision analysis, and calibration"
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [
-    { name = "Borunte Team" }
-]
+authors = [{ name = "Borunte Team" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -15,7 +13,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "google-genai>=1.45.0",
     "imageio>=2.35.0",
     "loguru>=0.7.3",
     "matplotlib>=3.10.6",
@@ -43,16 +40,12 @@ dev = [
     "types-tqdm>=4.66.0",
 ]
 
-[project.urls]
-Homepage = "https://github.com/yourorg/borunte"
-Repository = "https://github.com/yourorg/borunte"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # ============================================================================
-# RUFF CONFIGURATION
+# RUFF
 # ============================================================================
 
 [tool.ruff]
@@ -61,33 +54,22 @@ target-version = "py312"
 src = ["borunte"]
 
 [tool.ruff.lint]
-select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "N",      # pep8-naming
-    "UP",     # pyupgrade
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "SIM",    # flake8-simplify
-    "TCH",    # flake8-type-checking
-    "PTH",    # flake8-use-pathlib
-]
-ignore = [
-    "E203",   # whitespace before ':'
-    "E501",   # line too long (handled by formatter)
-    "B008",   # do not perform function calls in argument defaults
-    "B905",   # zip strict parameter
-]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH", "PTH"]
+ignore = ["E203", "E501", "B008", "B905"]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # Unused imports in __init__ files
-"tests/**" = ["S101"]     # Allow assert in tests
+"__init__.py" = ["F401"]
+"tests/**" = ["S101"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["borunte"]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -96,7 +78,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 # ============================================================================
-# MYPY CONFIGURATION
+# MYPY
 # ============================================================================
 
 [tool.mypy]
@@ -117,7 +99,6 @@ show_error_codes = true
 show_error_context = true
 pretty = true
 
-# External libraries without stubs
 [[tool.mypy.overrides]]
 module = [
     "pyrealsense2.*",
@@ -131,7 +112,7 @@ module = [
 ignore_missing_imports = true
 
 # ============================================================================
-# PYTEST CONFIGURATION
+# PYTEST
 # ============================================================================
 
 [tool.pytest.ini_options]
@@ -151,13 +132,13 @@ markers = [
     "integration: marks integration tests",
 ]
 
+# ============================================================================
+# COVERAGE (coverage.py >= 7, TOML support)
+# ============================================================================
+
 [tool.coverage.run]
 source = ["borunte"]
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/.*",
-]
+omit = ["*/tests/*", "*/__pycache__/*", "*/.*"]
 
 [tool.coverage.report]
 exclude_lines = [
