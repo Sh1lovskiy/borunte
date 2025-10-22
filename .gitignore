@@ -22,7 +22,8 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
+RESTRUCTURE_COMPLETE.md
+RESTRUCTURE_PLAN.md
 # Virtual environments
 .venv/
 venv/
@@ -42,6 +43,9 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
 
 # IDEs
 .vscode/
@@ -90,7 +94,3 @@ credentials.json
 # Documentation
 docs/_build/
 site/
-logs/
-.claude/
-.logs/
-.claude/
