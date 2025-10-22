@@ -23,7 +23,7 @@ except Exception:
 T = TypeVar("T")
 
 
-# ---------- options ----------
+# ──────────────────────────────────────── options ───────────────────────────────────────────
 @dataclass(slots=True)
 class _LogOptions:
     level: str = os.environ.get("BORUNTE_LOG_LEVEL", "INFO")
@@ -35,7 +35,7 @@ _CONFIGURED = False
 _LOG_FILE: Path | None = None
 
 
-# ---------- safe extras ----------
+# ─────────────────────────────────────── safe extras ────────────────────────────────────────
 class _DotSafe:
     """Absorb ANY nested attribute/item access and render empty string."""
 
@@ -61,7 +61,7 @@ def _resolve_log_dir() -> Path:
     return Path.cwd() / "logs"
 
 
-# ---------- sinks as callables (никаких format_map) ----------
+# ───────────────────────── sinks as callables (никаких format_map) ─────────────────────────
 def _console_sink(msg) -> None:
     r = msg.record
     module = r["extra"].get("module", r.get("name", "unknown"))

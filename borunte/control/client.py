@@ -35,7 +35,7 @@ class RobotClient:
         self._pack = 0
         self._lock = threading.Lock()
 
-    # ---------- базовая связь ----------
+    # ──────────────────────────────────── базовая связь ──────────────────────────────────────
 
     def connect(self) -> bool:
         if self._sock:
@@ -119,7 +119,7 @@ class RobotClient:
             return None
         return self._recv_json(timeout=timeout)
 
-    # ---------- примитивы протокола ----------
+    # ────────────────────────────────── примитивы протокола ──────────────────────────────────
 
     def query(self, keys: list[str], timeout: float | None = None) -> list[str] | None:
         rep = self._send_recv({"reqType": "query", "queryAddr": keys}, timeout=timeout)
@@ -145,7 +145,7 @@ class RobotClient:
         msg = cr[2] if len(cr) > 2 else ""
         return (status == "ok"), msg, rep
 
-    # ---------- чтение/запись позы ----------
+    # ──────────────────────────────── чтение/запись позы ─────────────────────────────────────
 
     def _read_readDataList(self, start: int, count: int) -> list[int] | None:
         ok, msg, rep = self.command("readDataList", str(start), str(count), "0", timeout=3.0)
@@ -263,7 +263,7 @@ class RobotClient:
             self._log.warning(f"pose mismatch! expected=[{', '.join(str(v) for v in expected)}]")
         return match
 
-    # ---------- статусы ----------
+    # ─────────────────────────────────────── статусы ─────────────────────────────────────────
 
     def heartbeat(self) -> tuple[bool, str]:
         rep = self._send_recv({"reqType": "heartbreak"})
@@ -295,7 +295,7 @@ class RobotClient:
         vals = self.query(["curAlarm"], timeout=3.0)
         return vals[0] if vals else None
 
-    # ---------- host/remote вспомогательное ----------
+    # ─────────────────────────── host/remote вспомогательное ─────────────────────────────────
 
     def assert_host_session(self) -> None:
         """Реассерт удалённого управления/host (best-effort, не бросает)."""
@@ -307,7 +307,7 @@ class RobotClient:
             except Exception:
                 pass
 
-    # ---------- движение ----------
+    # ─────────────────────────────────────── движение ────────────────────────────────────────
 
     def move_to_pose(
         self,

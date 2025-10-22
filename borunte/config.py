@@ -16,9 +16,7 @@ from typing import Final, Literal
 import numpy as np
 import numpy.typing as npt
 
-# ============================================================================
-# PROJECT PATHS
-# ============================================================================
+# ──────────────────────────────────── PROJECT PATHS ────────────────────────────────────
 
 BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
 
@@ -47,9 +45,7 @@ def _env_float(key: str, default: float) -> float:
     return float(value) if value is not None else default
 
 
-# ============================================================================
-# ROBOT COMMUNICATION CONSTANTS
-# ============================================================================
+# ─────────────────────────────── ROBOT COMMUNICATION CONSTANTS ────────────────────────────────
 
 ROBOT_POS_SCALE: Final[int] = 1000
 ROBOT_ANG_SCALE: Final[int] = 1000
@@ -59,9 +55,7 @@ ROBOT_DEFAULT_PORT: Final[int] = 9760
 ROBOT_REGISTER_BASE_ADDR: Final[int] = 800
 ROBOT_REGISTER_LENGTH: Final[int] = 6
 
-# ============================================================================
-# REALSENSE CAMERA CONSTANTS
-# ============================================================================
+# ────────────────────────────────── REALSENSE CAMERA CONSTANTS ─────────────────────────────────
 
 RS_DEFAULT_WIDTH: Final[int] = 1280
 RS_DEFAULT_HEIGHT: Final[int] = 720
@@ -69,9 +63,7 @@ RS_DEFAULT_FPS: Final[int] = 30
 RS_DEFAULT_EXPOSURE: Final[float] = 400.0
 RS_DEFAULT_GAIN: Final[float] = 16.0
 
-# ============================================================================
-# VISION PROCESSING CONSTANTS
-# ============================================================================
+# ─────────────────────────────── VISION PROCESSING CONSTANTS ───────────────────────────────
 
 VISION_MERGE_VOXEL_SIZE: Final[float] = 0.0025
 VISION_FRAME_VOXEL_SIZE: Final[float] = 0.002
@@ -85,9 +77,7 @@ CAMERA_DEFAULT_FY: Final[float] = 920.0
 CAMERA_DEFAULT_CX: Final[float] = 640.0
 CAMERA_DEFAULT_CY: Final[float] = 360.0
 
-# ============================================================================
-# CALIBRATION CONSTANTS
-# ============================================================================
+# ───────────────────────────────── CALIBRATION CONSTANTS ───────────────────────────────────
 
 CALIB_MIN_CHARUCO_CORNERS: Final[int] = 8
 CALIB_REPROJ_RMSE_MIN: Final[float] = 0.6
@@ -98,9 +88,7 @@ CALIB_CHARUCO_SQUARE_M: Final[float] = 0.035
 CALIB_CHARUCO_MARKER_M: Final[float] = 0.026
 CALIB_CHARUCO_DICT: Final[str] = "DICT_5X5_100"
 
-# ============================================================================
-# MOTION & WORKSPACE CONSTANTS
-# ============================================================================
+# ────────────────────────────── MOTION & WORKSPACE CONSTANTS ───────────────────────────────
 
 MOTION_SPEED_PERCENT_DEFAULT: Final[float] = 35.0
 MOTION_POSITION_TOL_MM: Final[float] = 2.0
@@ -110,9 +98,7 @@ MOTION_DEVIATION_MAX_DEG: Final[float] = 20.0
 GRID_MIN_COUNTS: Final[tuple[int, int, int]] = (3, 3, 3)
 GRID_TOTAL_POINTS_DEFAULT: Final[int] = 20
 
-# ============================================================================
-# NETWORK TIMING CONSTANTS
-# ============================================================================
+# ────────────────────────────────── NETWORK TIMING CONSTANTS ───────────────────────────────────
 
 NET_TIMEOUT_S: Final[float] = 5.0
 NET_HEARTBEAT_PERIOD_S: Final[float] = 5.0
@@ -125,17 +111,13 @@ NET_WAIT_STOP_S: Final[float] = 5.0
 NET_RETRY_DELAY_S: Final[float] = 2.0
 NET_RETRY_ATTEMPTS: Final[int] = 2
 
-# ============================================================================
-# FILE NAMING CONSTANTS
-# ============================================================================
+# ──────────────────────────────────── FILE NAMING CONSTANTS ─────────────────────────────────────
 
 FILENAME_POSES_JSON: Final[str] = "poses.json"
 FILENAME_INTRINSICS_JSON: Final[str] = "rs2_params.json"
 FILENAME_IMAGE_DIR: Final[str] = ""
 
-# ============================================================================
-# ENUMS
-# ============================================================================
+# ─────────────────────────────────────────── ENUMS ──────────────────────────────────────────────
 
 
 class LogLevel(str, Enum):
@@ -179,9 +161,7 @@ class CaptureView(str, Enum):
     DEPTH = "depth"
 
 
-# ============================================================================
-# DATACLASSES - Core Data Types
-# ============================================================================
+# ──────────────────────────────── DATACLASSES - Core Data Types ─────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -258,9 +238,7 @@ class HandEyeTransform:
             )
 
 
-# ============================================================================
-# DATACLASSES - Configuration Sections
-# ============================================================================
+# ───────────────────────────── DATACLASSES - Configuration Sections ──────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -375,9 +353,7 @@ class GridConfig:
     auto_delay_s: float = 0.8
 
 
-# ============================================================================
-# MAIN CONFIGURATION
-# ============================================================================
+# ────────────────────────────────── MAIN CONFIGURATION ──────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -501,9 +477,7 @@ def get_settings() -> Settings:
     )
 
 
-# ============================================================================
-# GLOBAL INSTANCE & ALIASES
-# ============================================================================
+# ────────────────────────────── GLOBAL INSTANCE & ALIASES ───────────────────────────────────
 
 # Global settings instance for backward compatibility
 BORUNTE_CONFIG: Settings = get_settings()
@@ -512,9 +486,7 @@ BORUNTE_CONFIG: Settings = get_settings()
 BorunteConfig = Settings
 
 
-# ============================================================================
-# MODULE EXPORTS
-# ============================================================================
+# ──────────────────────────────────── MODULE EXPORTS ─────────────────────────────────────────
 
 __all__ = [
     # Factory
